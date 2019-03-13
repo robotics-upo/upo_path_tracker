@@ -1,0 +1,42 @@
+cmake_minimum_required(VERSION 2.8.3)
+project(arco_path_tracker)
+
+## Find catkin macros and libraries
+## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
+## is used, also find other catkin packages
+
+find_package(catkin REQUIRED COMPONENTS
+  roscpp
+  std_msgs
+  tf2_ros
+  tf2_geometry_msgs
+)
+
+
+catkin_package(
+  INCLUDE_DIRS include
+  LIBRARIES navigator
+  CATKIN_DEPENDS roscpp
+)
+###########
+## Build ##
+###########
+
+include_directories(
+  ${PROJECT_SOURCE_DIR}/include
+  ${catkin_INCLUDE_DIRS}
+)
+
+
+add_library(navigator src/navigator.cpp)
+
+add_executable(arco_path_tracker src/navigation.cpp)
+target_link_libraries(arco_path_tracker ${catkin_LIBRARIES} navigator)
+
+add_executable(arco_path_tracker_2 src/navigation_2.cpp)
+target_link_libraries(arco_path_tracker_2 ${catkin_LIBRARIES} navigator)
+
+add_executable(nav_node src/nav_node.cpp)
+target_link_libraries(nav_node ${catkin_LIBRARIES} navigator)
+add_dependencies(nav_node ${catkin_EXPORTED_TARGETS})
+
