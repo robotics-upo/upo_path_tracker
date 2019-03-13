@@ -18,6 +18,7 @@
 #include <sensor_msgs/LaserScan.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <std_msgs/Bool.h>
+#include <trajectory_msgs/MultiDOFJointTrajectoryPoint.h>
 
 using namespace std;
 
@@ -33,76 +34,91 @@ typedef visualization_msgs::Marker RVizMarker;
 
 class SecurityMargin
 {
-  public:
-    SecurityMargin(ros::NodeHandle *n);
-    
-    SecurityMargin(bool onlyFront_, int laserArrayMsgLen_, float f_, float innerSecDist_, float extSecDist_, ros::NodeHandle *n);
-    ~SecurityMargin();
+public:
+  SecurityMargin(ros::NodeHandle *n);
 
-    void setParams(bool onlyFront_, int laserArrayMsgLen_, float f_, float innerSecDist_, float extSecDist_, ros::NodeHandle *n);
-    void buildArrays();
-    void checkObstacles();//Not sure if include this funcstion on this class or in displacement class
-    void publishRvizMarkers();
+  SecurityMargin(bool onlyFront_, int laserArrayMsgLen_, float f_, float innerSecDist_, float extSecDist_, int laserSecurityAngle_, ros::NodeHandle *n);
 
-    vector<float> secArray,secArrayExt;
+  void setParams(bool onlyFront_, int laserArrayMsgLen_, float f_, float innerSecDist_, float extSecDist_, int laserSecurityAngle_, ros::NodeHandle *n);
+  void buildArrays();
+  void publishRvizMarkers();
+  //Check if there is something inside the security area
 
-  private:
-    bool onlyFront;//TODO: implementar zonas de seguridad asimetricas delante y detras
-    bool paramsConfigured;
-    int laserArrayMsgLen; //721 for hokuyo lasers
-    //f es la relacion entre el semieje menor y el semieje mayor de la elipse de seguridad,
-    //es necesario en el caso de robots no simetricos como el ARCO y depende de su geometria
-    //Mas redondo menor f y viceversa
-    float f;
-    float innerSecDist;
-    float extSecDist;
+  bool checkObstacles(bool whichOne, sensor_msgs::LaserScan *scan);
 
-    RVizMarker markerInt,markerExt;
-    
-    ros::Publisher marker_pub;
-    ros::NodeHandle *nh;
+private:
+  bool onlyFront; //TODO: implementar zonas de seguridad asimetricas delante y detras
+  bool paramsConfigured;
+  //Dangerous area is the area inside the inner ellipse,
+  //securityArea is the area between extern and inner ellipse
+  bool isInsideDangerousArea, securityAreaFree;
+
+  int laserArrayMsgLen; //721 for hokuyo lasers
+  //f es la relacion entre el semieje menor y el semieje mayor de la elipse de seguridad,
+  //es necesario en el caso de robots no simetricos como el ARCO y depende de su geometria
+  //Mas redondo menor f y viceversa
+  float f;
+  float innerSecDist;
+  float extSecDist;
+  int laserSecurityAngle;
+
+  RVizMarker markerInt, markerExt;
+
+  ros::Publisher marker_pub;
+  ros::NodeHandle *nh;
+
+  vector<float> secArray, secArrayExt;
 };
 
 class Displacement
 {
-  public:
-    Displacement(ros::NodeHandle *n);
-    
-    ~Displacement();
-    void navigate();
+public:
+  Displacement(ros::NodeHandle *n, Navigators::SecurityMargin *margin_, sensor_msgs::LaserScan *laserScan_,tf2_ros::Buffer *tfBuffer_);
 
-   
+  void navigate(trajectory_msgs::MultiDOFJointTrajectoryPointPtr &nextPoint, geometry_msgs::PoseStampedPtr &globalGoalMapFrame);
 
-  private:
-    PoseStamp transformPose(PoseStamp originalPose, std::string from, std::string to, tf2_ros::Buffer *tfBuffer );
+private:
+  PoseStamp transformPose(PoseStamp originalPose, std::string from, std::string to);
 
-    //Distance calculation formulas
-    inline double euclideanDistance(double x0, double y0, double x, double y)
-    {
-        return sqrt(pow(x - x0, 2) + pow(y - y0, 2));
-    }
-    inline double euclideanDistance(PoseStamp pose1, PoseStamp pose2)
-    {
-        return euclideanDistance(pose1.pose.position.x, pose1.pose.position.y, pose2.pose.position.x, pose2.pose.position.y);
-    }
-    inline double euclideanDistance(PoseStamp next)
-    {
-        return euclideanDistance(0, 0, next.pose.position.x, next.pose.position.y);
-    }
-    void publishCmdVel();
+  //Distance calculation formulas
+  inline double euclideanDistance(double x0, double y0, double x, double y)
+  {
+    return sqrt(pow(x - x0, 2) + pow(y - y0, 2));
+  }
+  inline double euclideanDistance(PoseStamp pose1, PoseStamp pose2)
+  {
+    return euclideanDistance(pose1.pose.position.x, pose1.pose.position.y, pose2.pose.position.x, pose2.pose.position.y);
+  }
+  inline double euclideanDistance(PoseStamp next)
+  {
+    return euclideanDistance(0, 0, next.pose.position.x, next.pose.position.y);
+  }
+  void publishCmdVel();
 
-    //Aux functions
-    float getYawFromQuat(geometry_msgs::Quaternion quat);
+  //Aux functions
+  float getYawFromQuat(geometry_msgs::Quaternion quat);
 
-    ros::NodeHandle *nh;
-    ros::Publisher twist_pub,muving_state_pub, goal_reached_pub;
-    std_msgs::Bool muvingState, goalReached;
+  ros::NodeHandle *nh;
+  ros::Publisher twist_pub, muving_state_pub, goal_reached_pub;
+  std_msgs::Bool muvingState, goalReached;
 
-    bool holonomic;
-    double Vx, Vy, Wz;
-    
-    geometry_msgs::Twist vel;
-    
+  bool holonomic;
+
+  bool finalOrientationOk;
+
+  double Vx, Vy, Wz;
+  double dist2GlobalGoal;
+  float angleMargin, distMargin;
+  float angularMaxSpeed, linearMaxSpeed;
+
+  geometry_msgs::Twist vel;
+
+  Navigators::SecurityMargin *margin;
+
+  sensor_msgs::LaserScan *laserScan;
+  
+  PoseStamp globalGoalPose;
+  tf2_ros::Buffer *tfBuffer;
 };
 
 } // namespace Navigators
