@@ -19,6 +19,7 @@
 #include <visualization_msgs/MarkerArray.h>
 #include <std_msgs/Bool.h>
 #include <trajectory_msgs/MultiDOFJointTrajectoryPoint.h>
+#include <trajectory_msgs/MultiDOFJointTrajectory.h>
 
 using namespace std;
 
@@ -40,18 +41,22 @@ public:
   SecurityMargin(bool onlyFront_, int laserArrayMsgLen_, float f_, float innerSecDist_, float extSecDist_, int laserSecurityAngle_, ros::NodeHandle *n);
 
   void setParams(bool onlyFront_, int laserArrayMsgLen_, float f_, float innerSecDist_, float extSecDist_, int laserSecurityAngle_, ros::NodeHandle *n);
+  
   void buildArrays();
+
   void publishRvizMarkers();
   //Check if there is something inside the security area
-
   bool checkObstacles(bool whichOne, sensor_msgs::LaserScan *scan);
+
+  bool dangerAreaFree();
+  bool securityAreaFree();
 
 private:
   bool onlyFront; //TODO: implementar zonas de seguridad asimetricas delante y detras
   bool paramsConfigured;
   //Dangerous area is the area inside the inner ellipse,
   //securityArea is the area between extern and inner ellipse
-  bool isInsideDangerousArea, securityAreaFree;
+  bool isInsideDangerousArea, securityAreaOccup;
 
   int laserArrayMsgLen; //721 for hokuyo lasers
   //f es la relacion entre el semieje menor y el semieje mayor de la elipse de seguridad,
@@ -75,7 +80,9 @@ class Displacement
 public:
   Displacement(ros::NodeHandle *n, Navigators::SecurityMargin *margin_, sensor_msgs::LaserScan *laserScan_,tf2_ros::Buffer *tfBuffer_);
 
-  void navigate(trajectory_msgs::MultiDOFJointTrajectoryPointPtr &nextPoint, geometry_msgs::PoseStampedPtr &globalGoalMapFrame);
+  void navigate(trajectory_msgs::MultiDOFJointTrajectoryPoint *nextPoint, geometry_msgs::PoseStamped *globalGoalMapFrame);
+
+  bool finished();
 
 private:
   PoseStamp transformPose(PoseStamp originalPose, std::string from, std::string to);
@@ -100,25 +107,24 @@ private:
 
   ros::NodeHandle *nh;
   ros::Publisher twist_pub, muving_state_pub, goal_reached_pub;
-  std_msgs::Bool muvingState, goalReached;
+  
 
   bool holonomic;
-
   bool finalOrientationOk;
 
   double Vx, Vy, Wz;
   double dist2GlobalGoal;
+
   float angleMargin, distMargin;
   float angularMaxSpeed, linearMaxSpeed;
 
   geometry_msgs::Twist vel;
-
   Navigators::SecurityMargin *margin;
-
   sensor_msgs::LaserScan *laserScan;
-  
   PoseStamp globalGoalPose;
   tf2_ros::Buffer *tfBuffer;
+  std_msgs::Bool muvingState, goalReached;
+
 };
 
 } // namespace Navigators

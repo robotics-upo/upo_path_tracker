@@ -94,20 +94,36 @@ bool SecurityMargin::checkObstacles(bool whichOne, sensor_msgs::LaserScan *scan)
     for (int i = laserSecurityAngle; i < laserArrayMsgLen - laserSecurityAngle; i++)
     {
         //TODO: Change 0.02 to a parameter or filter the laser information
-        //It compared to secArray or secArrayExt depending the value of whichOne 
-        if (scan->ranges.at(i) < whichOne?secArray.at(i):secArrayExt.at(i) && scan->ranges.at(i) > 0.02)
+        //It compared to secArray or secArrayExt depending the value of whichOne
+        if (scan->ranges.at(i) < whichOne ? secArray.at(i) : secArrayExt.at(i) && scan->ranges.at(i) > 0.02)
         {
             if (whichOne)
             {
                 isInsideDangerousArea = true;
-                securityAreaFree = false;
+                securityAreaOccup = true;
             }
 
             return true;
         }
     }
+    //If we ara evaluating the exterior ellipses, and it didn't find nothing inside this ellipse, it changes the flags values
+    if (!whichOne)
+    {
+        isInsideDangerousArea = false;
+        securityAreaOccup = false;
+    }
     return false;
 }
+bool SecurityMargin::dangerAreaFree()
+{
+    return isInsideDangerousArea;
+}
+
+bool SecurityMargin::securityAreaFree()
+{
+    return !securityAreaOccup;
+}
+
 //Displacement Class functions
 //
 //
@@ -134,14 +150,13 @@ Displacement::Displacement(ros::NodeHandle *n, Navigators::SecurityMargin *margi
     angularMaxSpeed
     linearMaxSpeed
 */
-void Displacement::navigate(trajectory_msgs::MultiDOFJointTrajectoryPointPtr &nextPoint, geometry_msgs::PoseStampedPtr &globalGoalMapFrame)
+void Displacement::navigate(trajectory_msgs::MultiDOFJointTrajectoryPoint *nextPoint, geometry_msgs::PoseStamped *globalGoalMapFrame)
 {
 
     Vx = 0;
     Vy = 0;
     Wz = 0;
 
-    
     //The trajectory and the next_point transform is received in the map frame so we hace to transform it
     //to base_link frame to work with it
     PoseStamp nextPoseMapFrame, nextPoseBlFrame;
@@ -180,8 +195,8 @@ void Displacement::navigate(trajectory_msgs::MultiDOFJointTrajectoryPointPtr &ne
             globalGoalPose = transformPose(globalGoalPose, "map", "base_link");
             angle2GlobalGoal = Displacement::getYawFromQuat(globalGoalPose.pose.orientation);
             Wz = angularMaxSpeed;
-            Vx=0;
-            Vy=0;    
+            Vx = 0;
+            Vy = 0;
             if (angle2GlobalGoal < 0)
                 Wz *= -1;
             if (fabs(angle2Nextpoint) < angleMargin * 2)
@@ -221,6 +236,11 @@ void Displacement::navigate(trajectory_msgs::MultiDOFJointTrajectoryPointPtr &ne
         Displacement::publishCmdVel();
     }
 }
+bool Displacement::finished()
+{
+    return goalReached.data;
+}
+
 void Displacement::publishCmdVel()
 {
     muvingState.data = true;
