@@ -31,29 +31,29 @@ void SecurityMargin::setParams(bool onlyFront_, int laserArrayMsgLen_, float f_,
     nh = n;
     marker_pub = nh->advertise<RVizMarker>("/securityDistMarkers", 1);
 
-    markerInt.header.frame_id = "base_link";
+    markerInt.header.frame_id = "front_laser_link";
     markerInt.header.stamp = ros::Time();
     markerInt.ns = "debug";
     markerInt.id = 37;
     markerInt.type = RVizMarker::SPHERE_LIST;
     markerInt.action = RVizMarker::ADD;
     markerInt.pose.orientation.w = 1.0;
-    markerInt.scale.x = 1.0;
-    markerInt.scale.y = 1.0;
+    markerInt.scale.x = 0.1;
+    markerInt.scale.y = 0.1;
     markerInt.color.a = 1.0;
-    markerInt.color.r = 0.0;
-    markerInt.color.g = 1.0;
+    markerInt.color.r = 1.0;
+    markerInt.color.g = 0.0;
     markerInt.color.b = 0.0;
 
-    markerExt.header.frame_id = "base_link";
+    markerExt.header.frame_id = "front_laser_link";
     markerExt.header.stamp = ros::Time();
     markerExt.ns = "debug";
     markerExt.id = 12;
     markerExt.type = RVizMarker::SPHERE_LIST;
     markerExt.action = RVizMarker::ADD;
     markerExt.pose.orientation.w = 1.0;
-    markerExt.scale.x = 1.0;
-    markerExt.scale.y = 1.0;
+    markerExt.scale.x = 0.1;
+    markerExt.scale.y = 0.1;
     markerExt.color.a = 1.0;
     markerExt.color.r = 0.0;
     markerExt.color.g = 1.0;
@@ -64,7 +64,9 @@ void SecurityMargin::buildArrays()
     double x, y;
     geometry_msgs::Point p;
     p.z = 0;
-    for (int i = 0; i < laserArrayMsgLen; i++)
+    markerInt.points.clear();
+    markerExt.points.clear();
+    for (double i = 0; i < laserArrayMsgLen; i++)
     {
         x = innerSecDist * cos(i / 721 * M_PI - M_PI_2);
         y = f * innerSecDist * sin(i / 721 * M_PI - M_PI_2);
@@ -84,30 +86,30 @@ void SecurityMargin::buildArrays()
 
 void SecurityMargin::publishRvizMarkers()
 {
-    //publish r
+   
     marker_pub.publish(markerInt);
     marker_pub.publish(markerExt);
 }
-//whichOne: boolean to select which ellipse to evaluate, 1 for inner and 0 for extern
+//whichOne: boolean to select which ellipse to evaluate, 1 for ext and 0 for inner
 bool SecurityMargin::checkObstacles(bool whichOne, sensor_msgs::LaserScan *scan)
 {
     for (int i = laserSecurityAngle; i < laserArrayMsgLen - laserSecurityAngle; i++)
     {
         //TODO: Change 0.02 to a parameter or filter the laser information
         //It compared to secArray or secArrayExt depending the value of whichOne
-        if (scan->ranges.at(i) < whichOne ? secArray.at(i) : secArrayExt.at(i) && scan->ranges.at(i) > 0.02)
+        if (scan->ranges.at(i) < (whichOne ? secArrayExt.at(i) : secArray.at(i) ) && scan->ranges.at(i) > scan->range_min)
         {
-            if (whichOne)
+            if (!whichOne)
             {
                 isInsideDangerousArea = true;
                 securityAreaOccup = true;
+                
             }
-
             return true;
         }
     }
     //If we ara evaluating the exterior ellipses, and it didn't find nothing inside this ellipse, it changes the flags values
-    if (!whichOne)
+    if (whichOne)
     {
         isInsideDangerousArea = false;
         securityAreaOccup = false;
@@ -138,8 +140,14 @@ Displacement::Displacement(ros::NodeHandle *n, Navigators::SecurityMargin *margi
     vel.linear.z = 0;
     vel.angular.x = 0;
     vel.angular.y = 0;
-
-    //Pointer to the security margin object createdç
+    //To do: include in parameters configuration
+    angularMaxSpeed = 0.5;
+    linearMaxSpeed = 0.4;
+    angleMargin = 15;
+    distMargin = 0.35;
+    //By default we havent arrive anywhere at start
+    goalReached.data=false;
+    //Pointer to the security margin object createdÃ§
     margin = margin_;
     laserScan = laserScan_;
     tfBuffer = tfBuffer_;
@@ -150,13 +158,63 @@ Displacement::Displacement(ros::NodeHandle *n, Navigators::SecurityMargin *margi
     angularMaxSpeed
     linearMaxSpeed
 */
+//Under construction
+void Displacement::setRobotOrientation(float yaw, bool goal){
+    geometry_msgs::Quaternion q;
+    tf2::Quaternion q2;
+    q2.setRPY(0,0,yaw);
+    q = tf2::toMsg(q2);
+    Displacement::setRobotOrientation(q,goal);
+}
+void Displacement::setRobotOrientation(geometry_msgs::Quaternion q, bool goal){
+    //We receive the quaternion q in the frame map. We have to know the orientation of the robot
+    //also in the map frame
+    
+
+    PoseStamp robotPose;
+    robotPose.header.frame_id = "base_link";
+    robotPose.header.stamp = ros::Time(0);
+    robotPose.header.seq = rand();
+
+    robotPose.pose.position.x = 0;
+    robotPose.pose.position.y = 0;
+    robotPose.pose.position.z = 0;
+
+    robotPose.pose.orientation.w = 1;
+
+    robotPose = Displacement::transformPose(robotPose,"base_link","map");
+    float robotYaw = Displacement::getYawFromQuat(robotPose.pose.orientation);
+    float finalYaw = Displacement::getYawFromQuat(q);
+
+    if(robotYaw < 0)
+        robotYaw+=360;
+    if(finalYaw < 0)
+        finalYaw+=360;
+
+    float yawDif = robotYaw-finalYaw;
+
+    if( fabs(yawDif) > angleMargin){
+        Wz = angularMaxSpeed;
+
+        if( yawDif > 0 )
+            Wz*=-1;
+        if(fabs(yawDif) < angleMargin*2)
+            Wz/=2;
+    
+    }else if(goal){
+        goalReached.data = true;
+    }
+
+    Displacement::publishCmdVel();
+}
 void Displacement::navigate(trajectory_msgs::MultiDOFJointTrajectoryPoint *nextPoint, geometry_msgs::PoseStamped *globalGoalMapFrame)
 {
 
     Vx = 0;
     Vy = 0;
     Wz = 0;
-
+    //0 for positive, 1 for negative angle
+    bool angleSign = 0;
     //The trajectory and the next_point transform is received in the map frame so we hace to transform it
     //to base_link frame to work with it
     PoseStamp nextPoseMapFrame, nextPoseBlFrame;
@@ -165,82 +223,68 @@ void Displacement::navigate(trajectory_msgs::MultiDOFJointTrajectoryPoint *nextP
     nextPoseMapFrame.pose.position.y = nextPoint->transforms[0].translation.y;
     nextPoseMapFrame.pose.orientation = nextPoint->transforms[0].rotation;
 
-    nextPoseBlFrame = transformPose(nextPoseMapFrame, "map", "base_link");
-    double angle2Nextpoint = atan2(nextPoseBlFrame.pose.position.y, nextPoseBlFrame.pose.position.x);
+    nextPoseBlFrame = Displacement::transformPose(nextPoseMapFrame, "map", "base_link");
+    
+    angle2NextPoint = atan2(nextPoseBlFrame.pose.position.y, nextPoseBlFrame.pose.position.x);
+    if(angle2NextPoint < 0){
+        angleSign=1;
+        angle2NextPoint*=-1;
+    }
+    dist2NextPoint = Displacement::euclideanDistance(nextPoseBlFrame);
 
-    while (angle2Nextpoint > 2 * M_PI)
-    {
-        angle2Nextpoint -= 2 * M_PI;
-    }
-    if (angle2Nextpoint > M_PI)
-    {
-        angle2Nextpoint -= 2 * M_PI;
-    }
-    if (angle2Nextpoint < -M_PI)
-    {
-        angle2Nextpoint += 2 * M_PI;
-    }
-    double dist2NextPoint = Displacement::euclideanDistance(nextPoseBlFrame);
-
-    globalGoalPose = transformPose(*globalGoalMapFrame, "map", "base_link");
-    dist2GlobalGoal = euclideanDistance(globalGoalPose);
-    double angle2GlobalGoal = Displacement::getYawFromQuat(globalGoalPose.pose.orientation);
+    globalGoalPose = Displacement::transformPose(*globalGoalMapFrame, "map", "base_link");
+    
+    dist2GlobalGoal = Displacement::euclideanDistance(globalGoalPose);
+    angle2GlobalGoal = Displacement::getYawFromQuat(globalGoalPose.pose.orientation);
+    
 
     if (dist2GlobalGoal < distMargin && !goalReached.data)
     {
-
-        angle2Nextpoint = atan2(globalGoalPose.pose.position.y, globalGoalPose.pose.position.x);
-        while (fabs(angle2GlobalGoal) > angleMargin)
-        {
-            globalGoalPose = transformPose(globalGoalPose, "map", "base_link");
-            angle2GlobalGoal = Displacement::getYawFromQuat(globalGoalPose.pose.orientation);
-            Wz = angularMaxSpeed;
-            Vx = 0;
-            Vy = 0;
-            if (angle2GlobalGoal < 0)
-                Wz *= -1;
-            if (fabs(angle2Nextpoint) < angleMargin * 2)
-                Wz /= 2;
-
-            Displacement::publishCmdVel();
-        }
-        finalOrientationOk = true;
-        goalReached.data = true;
-        Displacement::publishCmdVel();
+        Displacement::setRobotOrientation(globalGoalMapFrame->pose.orientation,1);
     }
-    else if (!margin->checkObstacles(1, laserScan) && !goalReached.data)
+    else if (!margin->checkObstacles(0, laserScan) && !goalReached.data)
     { //Rotation in place
-        if (fabs(angle2Nextpoint) > (angleMargin + 5) * M_PI / 180)
+        
+        if (angle2NextPoint > (angleMargin + 5) * M_PI / 180)
         {
+            ROS_WARN("rotatin in place");
             Wz = angularMaxSpeed;
-            if (angle2Nextpoint < 0)
+            if (angleSign)
                 Wz *= -1;
-
-            Displacement::publishCmdVel();
+            if(angle2NextPoint < angleMargin*2)
+                Wz/=2;
+           
         }
         else
         {
+            ROS_WARN("going forwaaa");
             Vx = 0.4;
-            Wz = fabs(angle2Nextpoint) * 13 / (5 * M_PI);
+            Wz = angle2NextPoint * 13 / (5 * M_PI);
 
-            if (angle2Nextpoint < 0)
+            if (angleSign)
                 Wz *= -1;
 
             if (dist2GlobalGoal < distMargin * 2)
                 Vx *= 0.4;
-            Displacement::publishCmdVel();
         }
-    }
-    else if (margin->checkObstacles(1, laserScan))
-    {
+
         Displacement::publishCmdVel();
+    }
+    else if (margin->checkObstacles(0, laserScan))
+    {
+        Displacement::publishCmdVel();   
     }
 }
 bool Displacement::finished()
 {
     return goalReached.data;
 }
-
+void Displacement::setGoalReachedFlag(bool status_){
+    goalReached.data = false;
+    if(status_)
+        goalReached.data = true;
+       
+}
 void Displacement::publishCmdVel()
 {
     muvingState.data = true;

@@ -7,7 +7,7 @@
 sensor_msgs::LaserScan laserScan;
 trajectory_msgs::MultiDOFJointTrajectoryPoint nextPoint;
 geometry_msgs::PoseStamped globalGoal;
-bool trajReceived,laserGot;
+bool trajReceived,laserGot, status;
 
 void laserScanCallback(const sensor_msgs::LaserScanConstPtr &scan);
 void trajectoryCallback(const trajectory_msgs::MultiDOFJointTrajectory::ConstPtr &trj);
@@ -28,20 +28,27 @@ int main(int argc, char **argv)
 
     tf2_ros::TransformListener tfListener(tfBuffer);
 
-    ros::Rate loop_rate(40);
     //First, create the security margin object, now we will start with defaults params
     Navigators::SecurityMargin securityMargin(&n);
     //We create the displacement object and we pass it the objects to work with
     Navigators::Displacement despl(&n, &securityMargin, &laserScan, &tfBuffer);//Porque mierda me dice qe esta algo mal si compila?
     
 
+    ros::Rate loop_rate(1);
     while (ros::ok())
     {
         ros::spinOnce();
-        if(securityMargin.checkObstacles(0,&laserScan)){
-            if(trajReceived && !despl.finished())
-                despl.navigate(&nextPoint, &globalGoal);
+        //securityMargin.publishRvizMarkers();
+        despl.setGoalReachedFlag(status);
+        if(laserGot && trajReceived && !status){
+            
+            despl.navigate(&nextPoint,&globalGoal);       
+
+            if(despl.finished())
+                status=true;
         }
+    
+        loop_rate.sleep();
 
     }
     return 0;
@@ -66,5 +73,6 @@ void trajectoryCallback(const trajectory_msgs::MultiDOFJointTrajectory::ConstPtr
 //Used to calculate distance from base_link to global goal
 void globalGoalCallback(const geometry_msgs::PoseStampedConstPtr &globGoal_)
 {
+    status = false;
     globalGoal = *globGoal_;
 }

@@ -15,6 +15,7 @@
 #include <tf/tf.h>
 #include <tf2_ros/transform_listener.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+ #include <tf2/LinearMath/Quaternion.h>
 #include <sensor_msgs/LaserScan.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <std_msgs/Bool.h>
@@ -84,6 +85,10 @@ public:
 
   bool finished();
 
+  void setGoalReachedFlag(bool status_);
+  void setRobotOrientation(float yaw, bool goal);
+  void setRobotOrientation(geometry_msgs::Quaternion q, bool goal);
+
 private:
   PoseStamp transformPose(PoseStamp originalPose, std::string from, std::string to);
 
@@ -113,7 +118,8 @@ private:
   bool finalOrientationOk;
 
   double Vx, Vy, Wz;
-  double dist2GlobalGoal;
+  double dist2GlobalGoal, dist2NextPoint;
+  float angle2NextPoint, angle2GlobalGoal;
 
   float angleMargin, distMargin;
   float angularMaxSpeed, linearMaxSpeed;
