@@ -35,23 +35,35 @@ int main(int argc, char **argv)
     //First, create the security margin object, now we will start with defaults params
     SecurityMargin securityMargin(&n);
     //We create the displacement object and we pass it the objects to work with
-    Navigators::Displacement despl(&n, &securityMargin, &laserScan, &tfBuffer); //Porque mierda me dice qe esta algo mal si compila?
+    Navigators::Displacement despl(&n, &securityMargin, &laserScan, &tfBuffer,1); //Porque mierda me dice qe esta algo mal si compila?
 
-    ros::Rate loop_rate(1);
+    ros::Rate loop_rate(10);
     while (ros::ok())
     {
         ros::spinOnce();
-        //securityMargin.publishRvizMarkers();
+        securityMargin.publishRvizMarkers();
+        //Used to test if security margin works 
+        /*if(laserGot){
+            if(securityMargin.canIMove(&laserScan)){
+                ROS_ERROR("ME PUEDO MOVER");
+            }
+            
+        }
+        */
+        
+        
+        /*
+        */
         despl.setGoalReachedFlag(status);
         if (laserGot && trajReceived && !status)
         {
 
-            despl.navigate_nh(&nextPoint, &globalGoal);
+            despl.navigate(&nextPoint, &globalGoal);
 
             if (despl.finished())
                 status = true;
         }
-
+        
         loop_rate.sleep();
     }
     

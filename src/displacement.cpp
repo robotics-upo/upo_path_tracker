@@ -8,11 +8,10 @@
 namespace Navigators
 {
 
-
 //Displacement Class functions
 //
 //
-Displacement::Displacement(ros::NodeHandle *n, SecurityMargin *margin_, sensor_msgs::LaserScan *laserScan_, tf2_ros::Buffer *tfBuffer_)
+Displacement::Displacement(ros::NodeHandle *n, SecurityMargin *margin_, sensor_msgs::LaserScan *laserScan_, tf2_ros::Buffer *tfBuffer_, bool holon_)
 {
     nh = n;
     //Right now we will put the ARCO cmd vel topic but in the future it will selectable
@@ -25,9 +24,11 @@ Displacement::Displacement(ros::NodeHandle *n, SecurityMargin *margin_, sensor_m
     vel.angular.x = 0;
     vel.angular.y = 0;
 
+    holonomic = holon_;
+
     //To do: include in parameters configuration (pass it from the node from a launch file)
-    angularMaxSpeed = 0.5;
-    linearMaxSpeed = 0.4;
+    angularMaxSpeed = 0.3;
+    linearMaxSpeed = 0.2;
     angleMargin = 15;
     distMargin = 0.35;
 
@@ -72,12 +73,24 @@ void Displacement::setRobotOrientation(float finalYaw, bool goal, bool pub, floa
         robotYaw += 360;
     if (finalYaw < 0)
         finalYaw += 360;
-    
+
     float yawDif = finalYaw - robotYaw;
 
+    if (fabs(yawDif) > 180)
+    {
+        if (yawDif < 0)
+        {
+            yawDif += 360;
+        }
+        else
+        {
+            yawDif -= 360;
+        }
+    }
+    ROS_WARN("Yaw dif: %.2f", yawDif);
     if (fabs(yawDif) > angleMargin_)
     {
-        Wz = angularMaxSpeed*yawDif/fabs(yawDif);
+        Wz = angularMaxSpeed * yawDif / fabs(yawDif);
 
         if (fabs(yawDif) < angleMargin_ * 2)
             Wz /= 2;
@@ -86,10 +99,12 @@ void Displacement::setRobotOrientation(float finalYaw, bool goal, bool pub, floa
     {
         goalReached.data = true;
     }
-    if (pub){//If true it published the pure rotation, else it only set Wz values according to speeds and angleMargin gave by the user 
-        Vx=0;
-        Vy=0;
+    if (pub)
+    { //If true it published the pure rotation, else it only set Wz values according to speeds and angleMargin gave by the user
+        Vx = 0;
+        Vy = 0;
         Displacement::publishCmdVel();
+        ROS_INFO("Wz: %.2f", Wz);
     }
 }
 //Function used to aproximate to a near point slowly, like when the robot has arrive
@@ -102,11 +117,9 @@ void Displacement::aproximateTo(geometry_msgs::PoseStamped *pose)
     //We will try with /3
     Vx = p.pose.position.x / 3;
     Vy = p.pose.position.y / 3;
-    Displacement::setRobotOrientation(getYawFromQuat(pose->pose.orientation),0,0,0.08,3);
+    Displacement::setRobotOrientation(getYawFromQuat(pose->pose.orientation), 0, 0, 0.08, 3);
 
-    if (margin->checkObstacles(0, laserScan))
-        Displacement::publishCmdVel();
-    
+    Displacement::publishCmdVel();
 }
 /*
   *   The idea is to start muving in the direction of the nextPoint relative to base_link frame
@@ -115,43 +128,59 @@ void Displacement::aproximateTo(geometry_msgs::PoseStamped *pose)
   *   the mouvement will finally be in x direction. 
   *   Also, we will use differents top speed for x and y because is more dangerous to move in y direction than x. 
 */
-void Displacement::navigate_h(trajectory_msgs::MultiDOFJointTrajectoryPoint *nextPoint, geometry_msgs::PoseStamped *globalGoalMapFrame){
+void Displacement::moveHolon(double theta, double dist2GlobalGoal_)
+{
 
-   
-   //First we want to know where is nextPoint with respect to the base_link frame
+    //First we want to know where is nextPoint with respect to the base_link frame
 
-    float maxLinearXSpeed = linearMaxSpeed;
-    float maxLinearYSpeed = linearMaxSpeed*0.7;
+    //PoseStamp nextPoseBlFrame = Displacement::transformPose(*nextPoint, "map", "base_link");
+    //double theta = atan2(nextPoseBlFrame.pose.position.y, nextPoseBlFrame.pose.position.x);
 
-    PoseStamp nextPoseBlFrame = Displacement::transformPose(*nextPoint, "map", "base_link");
-    
-    float mod = sqrtf(pow(nextPoseBlFrame.pose.position.x,2)+pow(nextPoseBlFrame.pose.position.y,2));
-    geometry_msgs::Vector3 dirNextPoint;
+    Vx = cos(theta) * linearMaxSpeed;
+    Vy = sin(theta) * linearMaxSpeed * 0.7;
 
-    //Unitary direction module
-    dirNextPoint.x = nextPoseBlFrame.pose.position.x/mod; 
-    dirNextPoint.y = nextPoseBlFrame.pose.position.y/mod; 
+    ROS_WARN("THETA %.2f", theta);
+    ROS_WARN("V: [%.2f, %.2f]", Vx, Vy);
+    //We have already the Vx and Vy velocities, now we want the rotation to progressively face the next point
 
-    Vx = dirNextPoint.x * maxLinearXSpeed;
-    Vx = dirNextPoint.y * maxLinearYSpeed;
-
-    //We have already the Vx and Vy velocities, now we want the rotation to progressively face the next point 
-    float theta = atan2(dirNextPoint.y,dirNextPoint.x)*180/M_PI;
-    //Theta is in the interval [-180,180] 
+    //Theta is in the interval [-180,180]
     //theta/fabs(theta) does the sign job automatically, if theta<0, theta/fabs(theta) = -1 :D
-    if(fabs(theta)>angleMargin*2){
-        Wz = angularMaxSpeed*theta/fabs(theta);
-    }else{
-        Wz = angularMaxSpeed/2*theta/fabs(theta);
+    //if the angle to the next point is too big we do a little bit of rotation in place
+
+    if (fabs(theta) > 110 * M_PI / 180)
+    {
+        Wz = angularMaxSpeed * theta / fabs(theta);
+    }
+    else if (fabs(theta) > angleMargin * M_PI / 180)
+    {
+        Wz = angularMaxSpeed * theta / fabs(theta);
+        if (fabs(theta) < 2 * angleMargin * M_PI / 180)
+        {
+            Wz = (angularMaxSpeed / 2) * theta / fabs(theta);
+        }
     }
 
-    if(margin->canIMove(laserScan))
-        Displacement::publishCmdVel();
+    Displacement::publishCmdVel();
+}
 
+void Displacement::moveNonHolon(double angle2NextPoint_, double dist2GlobalGoal_)
+{
+    if (fabs(angle2NextPoint_) > angleMargin * M_PI / 180)
+    {
+        Wz = angularMaxSpeed * angle2NextPoint_ / fabs(angle2NextPoint_);
+    }
+    else
+    {
+        Vx = linearMaxSpeed;
+        Vy = 0;
+        Wz = fabs(angle2NextPoint_) / 3 * angle2NextPoint_ / fabs(angle2NextPoint_);
 
+        if (dist2GlobalGoal_ < distMargin * 2)
+            Vx *= 0.4;
+    }
 }
 //Non - holonomic navigation function
-void Displacement::navigate_nh(trajectory_msgs::MultiDOFJointTrajectoryPoint *nextPoint, geometry_msgs::PoseStamped *globalGoalMapFrame)
+void Displacement::navigate(trajectory_msgs::MultiDOFJointTrajectoryPoint *nextPoint, geometry_msgs::PoseStamped *globalGoalMapFrame)
 {
 
     Vx = 0;
@@ -163,7 +192,7 @@ void Displacement::navigate_nh(trajectory_msgs::MultiDOFJointTrajectoryPoint *ne
 
     nextPoseBlFrame = Displacement::transformPose(*nextPoint, "map", "base_link");
 
-    angle2NextPoint = atan2(nextPoseBlFrame.pose.position.y, nextPoseBlFrame.pose.position.x) / M_PI * 180;
+    angle2NextPoint = atan2(nextPoseBlFrame.pose.position.y, nextPoseBlFrame.pose.position.x);
     dist2NextPoint = Displacement::euclideanDistance(nextPoseBlFrame);
 
     globalGoalPose = Displacement::transformPose(*globalGoalMapFrame, "map", "base_link");
@@ -171,24 +200,43 @@ void Displacement::navigate_nh(trajectory_msgs::MultiDOFJointTrajectoryPoint *ne
     dist2GlobalGoal = Displacement::euclideanDistance(globalGoalPose);
     angle2GlobalGoal = Displacement::getYawFromQuat(globalGoalPose.pose.orientation);
 
+    /*
+    ROS_INFO("hEY");
+    ROS_INFO("Next point bl frame: [%.2f, %.2f]", nextPoseBlFrame.pose.position.x, nextPoseBlFrame.pose.position.y);
+    ROS_INFO("ANGLE 2 next point: %.2f", angle2NextPoint);
+    ROS_INFO("Global goal pose bl frame: [%.2f, %.2f]", globalGoalPose.pose.position.x, globalGoalPose.pose.position.y);
+    */
     if (dist2GlobalGoal < distMargin && !goalReached.data)
     {
-        Displacement::setRobotOrientation(globalGoalMapFrame->pose.orientation, 1, 1,angularMaxSpeed, angleMargin);
+        Displacement::aproximateTo(globalGoalMapFrame);
     }
-    else if (!margin->checkObstacles(0, laserScan) && !goalReached.data)
-    { //Rotation in place
-
-        if (angle2NextPoint > (angleMargin + 5))
+    else
+    {
+        if (holonomic)
         {
-            Displacement::setRobotOrientation(angle2NextPoint, 0, 1,angularMaxSpeed, angleMargin);
+            Displacement::moveHolon(angle2NextPoint, dist2GlobalGoal);
         }
         else
         {
-            Vx = 0.4;
-            Wz = angle2NextPoint * 13 / (5 * M_PI);
-
-            if (angle2NextPoint < 0)
-                Wz *= -1;
+            Displacement::moveNonHolon(angle2NextPoint, dist2GlobalGoal);
+        }
+    }
+    /*
+    if (dist2GlobalGoal < distMargin && !goalReached.data)
+    {
+        Displacement::setRobotOrientation(globalGoalMapFrame->pose.orientation, 1, 1, angularMaxSpeed, angleMargin);
+    }
+    else
+    { //Rotation in place
+        if (fabs(angle2NextPoint) > angleMargin * M_PI / 180)
+        {
+            Wz = angularMaxSpeed * angle2NextPoint / fabs(angle2NextPoint);
+        }
+        else
+        {
+            Vx = linearMaxSpeed;
+            Vy = 0;
+            Wz = fabs(angle2NextPoint) / 3 * angle2NextPoint / fabs(angle2NextPoint);
 
             if (dist2GlobalGoal < distMargin * 2)
                 Vx *= 0.4;
@@ -196,10 +244,10 @@ void Displacement::navigate_nh(trajectory_msgs::MultiDOFJointTrajectoryPoint *ne
 
         Displacement::publishCmdVel();
     }
-    else if (margin->checkObstacles(0, laserScan))
+    if (goalReached.data)
     {
-        Displacement::publishCmdVel();
     }
+    */
 }
 bool Displacement::finished()
 {
@@ -215,6 +263,7 @@ void Displacement::setGoalReachedFlag(bool status_)
 }
 void Displacement::publishCmdVel()
 {
+
     muvingState.data = true;
 
     vel.angular.z = Wz;
@@ -224,7 +273,11 @@ void Displacement::publishCmdVel()
     if (Vx == 0 && Vy == 0 && Wz == 0)
         muvingState.data = false; //It is used to publish to the topic the muving state of the robot
 
-    twist_pub.publish(vel);
+    if (margin->canIMove(laserScan))
+    {
+        twist_pub.publish(vel);
+    }
+
     muving_state_pub.publish(muvingState);
     goal_reached_pub.publish(goalReached);
 }

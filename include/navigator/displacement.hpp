@@ -43,15 +43,17 @@ class Displacement
 public:
   //Default constructor: you have to pass it the pointers to the objects neededs
   //TODO: use ros ptr messages or const ptr
-  Displacement(ros::NodeHandle *n, SecurityMargin *margin_, sensor_msgs::LaserScan *laserScan_,tf2_ros::Buffer *tfBuffer_);
+  Displacement(ros::NodeHandle *n, SecurityMargin *margin_, sensor_msgs::LaserScan *laserScan_,tf2_ros::Buffer *tfBuffer_, bool holon_);
   //Navigate function rights now is only no - holonmic
   void aproximateTo(geometry_msgs::PoseStamped *pose);
   
   //holonomic navigation
-  void navigate_h(trajectory_msgs::MultiDOFJointTrajectoryPoint *nextPoint, geometry_msgs::PoseStamped *globalGoalMapFrame);
+  void moveHolon(double theta, double dist2GlobalGoal_);
   //Non-holonomic navigation(orientate the robot toward the next point and go ahead)
-  void navigate_nh(trajectory_msgs::MultiDOFJointTrajectoryPoint *nextPoint, geometry_msgs::PoseStamped *globalGoalMapFrame);
+  void moveNonHolon(double angle2NextPoint_, double dist2GlobalGoal_);
+  void navigate(trajectory_msgs::MultiDOFJointTrajectoryPoint *nextPoint, geometry_msgs::PoseStamped *globalGoalMapFrame);
   //get goal reached message flag value
+
   bool finished();
 
   void setGoalReachedFlag(bool status_);

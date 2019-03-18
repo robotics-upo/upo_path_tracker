@@ -1,8 +1,6 @@
 
 #include <navigator/securityMargin.hpp>
 
-
-
 SecurityMargin::SecurityMargin(ros::NodeHandle *n)
 {
     SecurityMargin::setParams(true, 721, 1.6, 0.2, 0.6, 15, n);
@@ -31,29 +29,28 @@ void SecurityMargin::setParams(bool onlyFront_, int laserArrayMsgLen_, float f_,
     markerInt.header.stamp = ros::Time();
     markerInt.ns = "debug";
     markerInt.id = 37;
-    markerInt.type = visualization_msgs::Marker::SPHERE_LIST;
+    markerInt.type = visualization_msgs::Marker::LINE_STRIP;
     markerInt.action = visualization_msgs::Marker::ADD;
-    markerInt.pose.orientation.w = 1.0;
     markerInt.scale.x = 0.1;
-    markerInt.scale.y = 0.1;
     markerInt.color.a = 1.0;
-    markerInt.color.r = 1.0;
+    markerInt.color.r = 0.0;
     markerInt.color.g = 0.0;
-    markerInt.color.b = 0.0;
+    markerInt.color.b = 1.0;
 
     markerExt.header.frame_id = "front_laser_link";
     markerExt.header.stamp = ros::Time();
     markerExt.ns = "debug";
     markerExt.id = 12;
-    markerExt.type = visualization_msgs::Marker::SPHERE_LIST;
+    markerExt.type = visualization_msgs::Marker::LINE_STRIP;
     markerExt.action = visualization_msgs::Marker::ADD;
-    markerExt.pose.orientation.w = 1.0;
     markerExt.scale.x = 0.1;
-    markerExt.scale.y = 0.1;
     markerExt.color.a = 1.0;
     markerExt.color.r = 0.0;
-    markerExt.color.g = 1.0;
-    markerExt.color.b = 0.0;
+    markerExt.color.g = 0.0;
+    markerExt.color.b = 1.0;
+
+    isInsideDangerousArea = false;
+    securityAreaOccup = false;
 }
 void SecurityMargin::buildArrays()
 {
@@ -93,38 +90,54 @@ bool SecurityMargin::checkObstacles(bool whichOne, sensor_msgs::LaserScan *scan)
         //It compare the scan element to secArray or secArrayExt depending the value of whichOne
         if (scan->ranges.at(i) < (whichOne ? secArrayExt.at(i) : secArray.at(i)) && scan->ranges.at(i) > scan->range_min)
         {
+
             if (!whichOne)
             {
                 isInsideDangerousArea = true;
-                securityAreaOccup = true;
+
+                markerInt.color.r = 1.0;
+                markerInt.color.b = 0;
+                markerInt.color.g = 0;
             }
+            securityAreaOccup = true;
+            markerExt.color.r = 1.0;
+            markerExt.color.b = 0;
+            markerExt.color.g = 0;
             return true;
         }
     }
     //If we ara evaluating the exterior ellipses, and it didn't find nothing inside this ellipse, it changes the flags values
     if (whichOne)
     {
-        isInsideDangerousArea = false;
         securityAreaOccup = false;
+        markerExt.color.r = 0;
+        markerExt.color.b = 1.0;
+        markerExt.color.g = 0;
     }
+    isInsideDangerousArea = false;
+    markerInt.color.r = 0;
+    markerInt.color.b = 1.0;
+    markerInt.color.g = 0;
+
     return false;
 }
 //This functions will use check obstacles function
 // If something inside the dangerous area, returns false
 // And it keeps returning false until the object has gone away from the security area(outside the outer ellipse)
-bool SecurityMargin::canIMove(sensor_msgs::LaserScan *scan){
-
-    if(checkObstacles(0,scan))
+bool SecurityMargin::canIMove(sensor_msgs::LaserScan *scan)
+{
+    if (checkObstacles(0, scan))
         return false;
-    
-    //If we arrived here, it means that there is no obstacle inside dangerous area 
-    //But the obstacle could be still between the two margins, so we check if it's inside the exterior margins
-    if(!checkObstacles(1,scan))
-        return true;
-    
-    //Finally by default it returns false
-    return false;
 
+    if (securityAreaOccup)
+    {
+        if (checkObstacles(1, scan))
+        {
+            return false;
+        }
+    }
+
+    return true;
 }
 bool SecurityMargin::dangerAreaFree()
 {
