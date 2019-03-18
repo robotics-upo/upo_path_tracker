@@ -15,7 +15,8 @@ find_package(catkin REQUIRED COMPONENTS
 
 catkin_package(
   INCLUDE_DIRS include
-  LIBRARIES navigator
+  LIBRARIES displacement
+  LIBRARIES securityMargin
   CATKIN_DEPENDS roscpp
 )
 ###########
@@ -28,15 +29,16 @@ include_directories(
 )
 
 
-add_library(navigator src/navigator.cpp)
 
-add_executable(arco_path_tracker src/navigation.cpp)
-target_link_libraries(arco_path_tracker ${catkin_LIBRARIES} navigator)
+#add_executable(arco_path_tracker src/navigation.cpp)
+#target_link_libraries(arco_path_tracker ${catkin_LIBRARIES} navigator)
 
-add_executable(arco_path_tracker_2 src/navigation_2.cpp)
-target_link_libraries(arco_path_tracker_2 ${catkin_LIBRARIES} navigator)
+#add_executable(arco_path_tracker_2 src/navigation_2.cpp)
+#target_link_libraries(arco_path_tracker_2 ${catkin_LIBRARIES} navigator)
 
 add_executable(nav_node src/nav_node.cpp)
-target_link_libraries(nav_node ${catkin_LIBRARIES} navigator)
+add_library(security_margin src/securityMargin.cpp)
+add_library(displacement src/displacement.cpp)
+target_link_libraries(nav_node ${catkin_LIBRARIES} displacement security_margin)
 add_dependencies(nav_node ${catkin_EXPORTED_TARGETS})
 

@@ -1,19 +1,23 @@
+
 #include <ros/ros.h>
 #include <math.h>
 #include <vector>
-#include <navigator/navigator.hpp>
+#include <navigator/displacement.hpp>
+#include <navigator/securityMargin.hpp>
 
 //Calbacks and variables used inside callbacks
 sensor_msgs::LaserScan laserScan;
+sensor_msgs::LaserScanConstPtr laserScanCPtr;
 trajectory_msgs::MultiDOFJointTrajectoryPoint nextPoint;
 geometry_msgs::PoseStamped globalGoal;
-bool trajReceived,laserGot, status;
+
+bool trajReceived, laserGot, status;
 
 void laserScanCallback(const sensor_msgs::LaserScanConstPtr &scan);
 void trajectoryCallback(const trajectory_msgs::MultiDOFJointTrajectory::ConstPtr &trj);
 void globalGoalCallback(const geometry_msgs::PoseStampedConstPtr &globGoal_);
 
-//Other stuff 
+//Other stuff
 tf2_ros::Buffer tfBuffer;
 
 int main(int argc, char **argv)
@@ -29,10 +33,9 @@ int main(int argc, char **argv)
     tf2_ros::TransformListener tfListener(tfBuffer);
 
     //First, create the security margin object, now we will start with defaults params
-    Navigators::SecurityMargin securityMargin(&n);
+    SecurityMargin securityMargin(&n);
     //We create the displacement object and we pass it the objects to work with
-    Navigators::Displacement despl(&n, &securityMargin, &laserScan, &tfBuffer);//Porque mierda me dice qe esta algo mal si compila?
-    
+    Navigators::Displacement despl(&n, &securityMargin, &laserScan, &tfBuffer); //Porque mierda me dice qe esta algo mal si compila?
 
     ros::Rate loop_rate(1);
     while (ros::ok())
@@ -40,35 +43,37 @@ int main(int argc, char **argv)
         ros::spinOnce();
         //securityMargin.publishRvizMarkers();
         despl.setGoalReachedFlag(status);
-        if(laserGot && trajReceived && !status){
-            
-            despl.navigate(&nextPoint,&globalGoal);       
+        if (laserGot && trajReceived && !status)
+        {
 
-            if(despl.finished())
-                status=true;
+            despl.navigate_nh(&nextPoint, &globalGoal);
+
+            if (despl.finished())
+                status = true;
         }
-    
-        loop_rate.sleep();
 
+        loop_rate.sleep();
     }
+    
+
     return 0;
 }
 void laserScanCallback(const sensor_msgs::LaserScanConstPtr &scan)
 {
+    laserScanCPtr = scan;
     laserScan = *scan;
     laserGot = true;
 }
 void trajectoryCallback(const trajectory_msgs::MultiDOFJointTrajectory::ConstPtr &trj)
 {
     trajReceived = true;
-    
+
     int i = 0;
 
     if (trj->points.size() > 1)
         i = 1;
 
-    nextPoint = trj->points[i];    
-    
+    nextPoint = trj->points[i];
 }
 //Used to calculate distance from base_link to global goal
 void globalGoalCallback(const geometry_msgs::PoseStampedConstPtr &globGoal_)
