@@ -11,7 +11,7 @@ namespace Navigators
 //Displacement Class functions
 //
 //
-Displacement::Displacement(ros::NodeHandle *n, SecurityMargin *margin_, sensor_msgs::LaserScan *laserScan_, tf2_ros::Buffer *tfBuffer_)
+Displacement::Displacement(ros::NodeHandle *n, SecurityMargin *margin_, sensor_msgs::LaserScan *laserScan1_, sensor_msgs::LaserScan *laserScan2_, tf2_ros::Buffer *tfBuffer_)
 {
     nh = n;
     //Right now we will put the ARCO cmd vel topic but in the future it will selectable
@@ -19,19 +19,19 @@ Displacement::Displacement(ros::NodeHandle *n, SecurityMargin *margin_, sensor_m
     muving_state_pub = nh->advertise<std_msgs::Bool>("/trajectory_tracker/muving_state", 10);
     goal_reached_pub = nh->advertise<std_msgs::Bool>("/trajectory_tracker/local_goal_reached", 1);
 
-    nh->param("/trajectory_tracker/holonomic",holonomic,(bool) 0);
-    nh->param("/trajectory_tracker/angular_max_speed",angularMaxSpeed,(float) 0.5);
-    nh->param("/trajectory_tracker/linear_max_speed_x",linearMaxSpeedX,(float) 0.3);
-    nh->param("/trajectory_tracker/linear_max_speed_y",linearMaxSpeedY,(float) 0.2);
-    nh->param("/trajectory_tracker/angle_margin",angleMargin,(float) 15);
-    nh->param("/trajectory_tracker/dist_margin",distMargin,(float) 0.35);
-
+    nh->param("/trajectory_tracker/holonomic", holonomic, (bool)0);
+    nh->param("/trajectory_tracker/angular_max_speed", angularMaxSpeed, (float)0.5);
+    nh->param("/trajectory_tracker/linear_max_speed_x", linearMaxSpeedX, (float)0.3);
+    nh->param("/trajectory_tracker/linear_max_speed_y", linearMaxSpeedY, (float)0.2);
+    nh->param("/trajectory_tracker/angle_margin", angleMargin, (float)15);
+    nh->param("/trajectory_tracker/dist_margin", distMargin, (float)0.35);
 
     //By default we havent arrive anywhere at start
     goalReached.data = false;
     //Pointer to the security margin object createdÃ§
     margin = margin_;
-    laserScan = laserScan_;
+    laserScan1 = laserScan1_;
+    laserScan2 = laserScan2_;
     //cout << &laserScan<< endl<<&laserScan_ <<endl;
     tfBuffer = tfBuffer_;
 
@@ -95,8 +95,8 @@ void Displacement::setRobotOrientation(float finalYaw, bool goal, bool pub, floa
     }
 
     if (pub)
-    { 
-        
+    {
+
         Displacement::publishCmdVel();
     }
 }
@@ -201,7 +201,7 @@ void Displacement::navigate(trajectory_msgs::MultiDOFJointTrajectoryPoint *nextP
     */
     if (dist2GlobalGoal < distMargin && !goalReached.data)
     {
-        Displacement::aproximateTo(globalGoalMapFrame,1);
+        Displacement::aproximateTo(globalGoalMapFrame, 1);
     }
     else
     {
@@ -266,7 +266,7 @@ void Displacement::publishCmdVel()
     if (Vx == 0 && Vy == 0 && Wz == 0)
         muvingState.data = false; //It is used to publish to the topic the muving state of the robot
 
-    if (margin->canIMove(laserScan))
+    if (margin->canIMove(laserScan1,laserScan2))
     {
         twist_pub.publish(vel);
     }

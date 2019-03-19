@@ -23,21 +23,16 @@
 
 using namespace std;
 
-
-
 //Defines aqui
 //Aqui clases
 
-
 class SecurityMargin
 {
-    typedef geometry_msgs::PoseStamped PoseStamp;
-    typedef visualization_msgs::MarkerArray RVizMarkerArray;
-    typedef visualization_msgs::Marker RVizMarker;
+  typedef geometry_msgs::PoseStamped PoseStamp;
+  typedef visualization_msgs::MarkerArray RVizMarkerArray;
+  typedef visualization_msgs::Marker RVizMarker;
 
 public:
- 
-
   //Default constructor: it set params to defaults values(see navigator.cpp)
   SecurityMargin(ros::NodeHandle *n);
   /** 
@@ -53,13 +48,13 @@ public:
   */
   //It pases the params to the class variables
   void setParams(ros::NodeHandle *n);
-  //Builds the two security arrays and markers 
+  //Builds the two security arrays and markers
   void buildArrays();
   //Publish the rviz markers to visualize the security margin in RViz
   void publishRvizMarkers();
   //Check if there is something inside the security area
-  bool checkObstacles(bool whichOne, sensor_msgs::LaserScan *scan);
-  bool canIMove(sensor_msgs::LaserScan *scan);
+  bool checkObstacles(bool whichOne, sensor_msgs::LaserScan *scan1, sensor_msgs::LaserScan *scan2);
+  bool canIMove(sensor_msgs::LaserScan *scan1, sensor_msgs::LaserScan *scan2);
   //get values of booleans private variables
   bool dangerAreaFree();
   bool securityAreaFree();
@@ -69,24 +64,23 @@ private:
   bool paramsConfigured;
   //Dangerous area is the area inside the inner ellipse,
   //securityArea is the area between extern and inner ellipse
-  bool isInsideDangerousArea, securityAreaOccup;
+  bool isInsideDangerousArea1, securityAreaOccup1;
+  bool isInsideDangerousArea2, securityAreaOccup2;
 
   int laserArrayMsgLen; //721 for hokuyo lasers
   //f es la relacion entre el semieje menor y el semieje mayor de la elipse de seguridad,
   //es necesario en el caso de robots no simetricos como el ARCO y depende de su geometria
   //Mas redondo menor f y viceversa
   float f;
-  float innerSecDist,extSecDist;
+  float innerSecDist, extSecDist;
   int laserSecurityAngle;
 
-  RVizMarker markerInt, markerExt;
+  RVizMarker markerIntFr, markerExtFr, markerIntBack, markerExtBack;
 
   ros::Publisher marker_pub;
   ros::NodeHandle *nh;
 
-  vector<float> secArray, secArrayExt;
+  vector<float> secArrayFr, secArrayExtFr, secArrayBack, secArrayExtBack;
 };
-
-
 
 #endif

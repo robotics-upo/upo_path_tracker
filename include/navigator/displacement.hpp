@@ -43,7 +43,7 @@ class Displacement
 public:
   //Default constructor: you have to pass it the pointers to the objects neededs
   //TODO: use ros ptr messages or const ptr
-  Displacement(ros::NodeHandle *n, SecurityMargin *margin_, sensor_msgs::LaserScan *laserScan_, tf2_ros::Buffer *tfBuffer_);
+  Displacement(ros::NodeHandle *n, SecurityMargin *margin_, sensor_msgs::LaserScan *laserScan1_,sensor_msgs::LaserScan *laserScan2_, tf2_ros::Buffer *tfBuffer_);
   //Navigate function rights now is only no - holonmic
   void aproximateTo(geometry_msgs::PoseStamped *pose,bool isGoal);
   
@@ -101,7 +101,7 @@ private:
 
   geometry_msgs::Twist vel;
   SecurityMargin *margin;
-  sensor_msgs::LaserScan *laserScan;
+  sensor_msgs::LaserScan *laserScan1,*laserScan2;
   PoseStamp globalGoalPose;
   tf2_ros::Buffer *tfBuffer;
   std_msgs::Bool muvingState, goalReached;
