@@ -1,0 +1,15 @@
+security_margin:
+  only_front: 1
+  laser_range_msg_length: 721
+  f_relationship: 1.6
+  inner_radius: 0.2
+  outer_radius: 0.6
+  laser_security_angle: 15
+
+trajectory_tracker:
+  holonomic: 1
+  angular_max_speed: 0.5
+  linear_max_speed_x: 0.3
+  linear_max_speed_y: 0.2
+  angle_margin: 15
+  dist_margin: 0.35

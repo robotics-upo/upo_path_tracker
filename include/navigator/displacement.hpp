@@ -43,14 +43,10 @@ class Displacement
 public:
   //Default constructor: you have to pass it the pointers to the objects neededs
   //TODO: use ros ptr messages or const ptr
-  Displacement(ros::NodeHandle *n, SecurityMargin *margin_, sensor_msgs::LaserScan *laserScan_,tf2_ros::Buffer *tfBuffer_, bool holon_);
+  Displacement(ros::NodeHandle *n, SecurityMargin *margin_, sensor_msgs::LaserScan *laserScan_, tf2_ros::Buffer *tfBuffer_);
   //Navigate function rights now is only no - holonmic
-  void aproximateTo(geometry_msgs::PoseStamped *pose);
+  void aproximateTo(geometry_msgs::PoseStamped *pose,bool isGoal);
   
-  //holonomic navigation
-  void moveHolon(double theta, double dist2GlobalGoal_);
-  //Non-holonomic navigation(orientate the robot toward the next point and go ahead)
-  void moveNonHolon(double angle2NextPoint_, double dist2GlobalGoal_);
   void navigate(trajectory_msgs::MultiDOFJointTrajectoryPoint *nextPoint, geometry_msgs::PoseStamped *globalGoalMapFrame);
   //get goal reached message flag value
 
@@ -82,6 +78,10 @@ private:
   //TODO: make the command vel topic a parameter
   void publishCmdVel();
 
+  //holonomic navigation
+  void moveHolon(double theta, double dist2GlobalGoal_);
+  //Non-holonomic navigation(orientate the robot toward the next point and go ahead)
+  void moveNonHolon(double angle2NextPoint_, double dist2GlobalGoal_);
   //The yaw is returned in degrees
   float getYawFromQuat(geometry_msgs::Quaternion quat);
 
@@ -97,7 +97,7 @@ private:
   float angle2NextPoint, angle2GlobalGoal;
 
   float angleMargin, distMargin;
-  float angularMaxSpeed, linearMaxSpeed;
+  float angularMaxSpeed, linearMaxSpeedX, linearMaxSpeedY;
 
   geometry_msgs::Twist vel;
   SecurityMargin *margin;

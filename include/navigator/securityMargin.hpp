@@ -51,9 +51,8 @@ public:
    * @param laserSecurityAngle: Set to 0 if you want to check the full range of the laser array, the security angle reduces it
    *   simmetrically. Ej: 10, the security margin will be checked between 10 and 170 degrees for a 180º laser(Hokuyo)
   */
-  SecurityMargin(bool onlyFront_, int laserArrayMsgLen_, float f_, float innerSecDist_, float extSecDist_, int laserSecurityAngle_, ros::NodeHandle *n);
   //It pases the params to the class variables
-  void setParams(bool onlyFront_, int laserArrayMsgLen_, float f_, float innerSecDist_, float extSecDist_, int laserSecurityAngle_, ros::NodeHandle *n);
+  void setParams(ros::NodeHandle *n);
   //Builds the two security arrays and markers 
   void buildArrays();
   //Publish the rviz markers to visualize the security margin in RViz
@@ -77,8 +76,7 @@ private:
   //es necesario en el caso de robots no simetricos como el ARCO y depende de su geometria
   //Mas redondo menor f y viceversa
   float f;
-  float innerSecDist;
-  float extSecDist;
+  float innerSecDist,extSecDist;
   int laserSecurityAngle;
 
   RVizMarker markerInt, markerExt;

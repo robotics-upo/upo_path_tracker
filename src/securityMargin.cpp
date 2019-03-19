@@ -3,28 +3,27 @@
 
 SecurityMargin::SecurityMargin(ros::NodeHandle *n)
 {
-    SecurityMargin::setParams(true, 721, 1.6, 0.2, 0.6, 15, n);
+    SecurityMargin::setParams(n);
     SecurityMargin::buildArrays();
 }
-SecurityMargin::SecurityMargin(bool onlyFront_, int laserArrayMsgLen_, float f_, float innerSecDist_, float extSecDist_, int laserSecurityAngle_, ros::NodeHandle *n)
-{
-    SecurityMargin::setParams(onlyFront_, laserArrayMsgLen_, f_, innerSecDist_, extSecDist_, laserSecurityAngle_, n);
-    SecurityMargin::buildArrays();
-}
-void SecurityMargin::setParams(bool onlyFront_, int laserArrayMsgLen_, float f_, float innerSecDist_, float extSecDist_, int laserSecurityAngle_, ros::NodeHandle *n)
+void SecurityMargin::setParams(ros::NodeHandle *n)
 {
     //Parse parameters
-    onlyFront = onlyFront_;
-    laserArrayMsgLen = laserArrayMsgLen_;
-    f = f_;
-    innerSecDist = innerSecDist_;
-    extSecDist = extSecDist_;
-    paramsConfigured = true;
-
-    laserSecurityAngle = ceil(laserSecurityAngle_ * (laserArrayMsgLen / 180));
     nh = n;
     marker_pub = nh->advertise<visualization_msgs::Marker>("/securityDistMarkers", 1);
+    
+    float laserSecurityAngle_;
+    
+    nh->param("/security_margin/only_front", onlyFront, (bool) 1);
+    nh->param("/security_margin/laser_range_msg_length", laserArrayMsgLen, (int) 721);
+    nh->param("/security_margin/f_relationship",f,(float)1.6);
+    nh->param("/security_margin/inner_radius", innerSecDist, (float) 0.2);
+    nh->param("/security_margin/outer_radius",extSecDist, (float) 0.6);
+    nh->param("/security_margin/laser_security_angle/",laserSecurityAngle_, (float)15);
 
+    laserSecurityAngle = ceil(laserSecurityAngle_ * (laserArrayMsgLen / 180));
+
+    //Initialize inner margin markers
     markerInt.header.frame_id = "front_laser_link";
     markerInt.header.stamp = ros::Time();
     markerInt.ns = "debug";
@@ -37,6 +36,7 @@ void SecurityMargin::setParams(bool onlyFront_, int laserArrayMsgLen_, float f_,
     markerInt.color.g = 0.0;
     markerInt.color.b = 1.0;
 
+    //Initialize exterior margin markers
     markerExt.header.frame_id = "front_laser_link";
     markerExt.header.stamp = ros::Time();
     markerExt.ns = "debug";
@@ -49,8 +49,10 @@ void SecurityMargin::setParams(bool onlyFront_, int laserArrayMsgLen_, float f_,
     markerExt.color.g = 0.0;
     markerExt.color.b = 1.0;
 
+    //Control flags
     isInsideDangerousArea = false;
     securityAreaOccup = false;
+    paramsConfigured = true;
 }
 void SecurityMargin::buildArrays()
 {
@@ -60,19 +62,15 @@ void SecurityMargin::buildArrays()
     markerInt.points.clear();
     markerExt.points.clear();
     for (double i = 0; i < laserArrayMsgLen; i++)
-    { //TODO: Change 721 to laserArrayMsgLen
-        p.x = innerSecDist * cos(i / 721 * M_PI - M_PI_2);
-        p.y = f * innerSecDist * sin(i / 721 * M_PI - M_PI_2);
+    { 
+        p.x = innerSecDist * cos(i / ((double)laserArrayMsgLen)* M_PI - M_PI_2);
+        p.y = f * innerSecDist * sin(i / ((double)laserArrayMsgLen) * M_PI - M_PI_2);
         secArray.push_back(sqrtf(p.x * p.x + p.y * p.y));
-        //p.x = x;
-        //p.y = y;
         markerInt.points.push_back(p);
 
         p.x *= extSecDist / innerSecDist;
         p.y *= extSecDist / innerSecDist;
         secArrayExt.push_back(sqrtf(p.x * p.x + p.y * p.y));
-        //p.x = x;
-        //p.y = y;
         markerExt.points.push_back(p);
     }
 }
@@ -124,6 +122,7 @@ bool SecurityMargin::checkObstacles(bool whichOne, sensor_msgs::LaserScan *scan)
 //This functions will use check obstacles function
 // If something inside the dangerous area, returns false
 // And it keeps returning false until the object has gone away from the security area(outside the outer ellipse)
+
 bool SecurityMargin::canIMove(sensor_msgs::LaserScan *scan)
 {
     if (checkObstacles(0, scan))
@@ -136,7 +135,6 @@ bool SecurityMargin::canIMove(sensor_msgs::LaserScan *scan)
             return false;
         }
     }
-
     return true;
 }
 bool SecurityMargin::dangerAreaFree()

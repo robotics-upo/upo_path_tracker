@@ -1,0 +1,6 @@
+<launch>
+
+    <rosparam command="load" file="$(find arco_path_tracker)/cfg/navigation.yaml"/>
+    <node pkg="arco_path_tracker" type="nav_node" name="nav_node" />
+
+</launch>
