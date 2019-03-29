@@ -17,14 +17,13 @@
 #include <tf2_ros/transform_listener.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
-#include <sensor_msgs/LaserScan.h>
-#include <visualization_msgs/MarkerArray.h>
 #include <std_msgs/Bool.h>
+#include <std_msgs/UInt8MultiArray.h>
+#include <std_srvs/Trigger.h>
 #include <trajectory_msgs/MultiDOFJointTrajectoryPoint.h>
 #include <trajectory_msgs/MultiDOFJointTrajectory.h>
 
 #include <navigator/securityMargin.hpp>
-
 
 using namespace std;
 
@@ -35,27 +34,31 @@ namespace Navigators
 
 //Typedefs aqui
 typedef geometry_msgs::PoseStamped PoseStamp;
-typedef visualization_msgs::MarkerArray RVizMarkerArray;
 typedef visualization_msgs::Marker RVizMarker;
 
 class Displacement
 {
 public:
   //Default constructor: you have to pass it the pointers to the objects neededs
-  //TODO: use ros ptr messages or const ptr
-  Displacement(ros::NodeHandle *n, SecurityMargin *margin_, sensor_msgs::LaserScan *laserScan1_,sensor_msgs::LaserScan *laserScan2_, tf2_ros::Buffer *tfBuffer_);
+  Displacement(ros::NodeHandle *n, SecurityMargin *margin_, tf2_ros::Buffer *tfBuffer_);
   //Navigate function rights now is only no - holonmic
-  void aproximateTo(geometry_msgs::PoseStamped *pose,bool isGoal);
-  
-  void navigate(trajectory_msgs::MultiDOFJointTrajectoryPoint *nextPoint, geometry_msgs::PoseStamped *globalGoalMapFrame);
+  void goHomeLab();
+
+  void aproximateTo(geometry_msgs::PoseStamped *pose, bool isGoal, bool isHome);
+
+  void navigate(bool isHome);
+  //void navigate(trajectory_msgs::MultiDOFJointTrajectoryPoint *nextPoint, PoseStamp *globalGoalMapFrame, bool isHome);
   //get goal reached message flag value
 
-  bool finished();
+  bool hasFinished();
 
   void setGoalReachedFlag(bool status_);
   //Functions to do a rotation in place, you can give it a quaternion or a yaw
   void setRobotOrientation(geometry_msgs::Quaternion q, bool goal, bool pub, float speed, float angleMargin_);
   void setRobotOrientation(float finalYaw, bool goal, bool pub, float speed, float angleMargin_);
+
+  void trajectoryCb(const trajectory_msgs::MultiDOFJointTrajectory::ConstPtr &trj);
+  void globalGoalCb(const geometry_msgs::PoseStampedConstPtr &globGoal_);
 
 private:
   //Transform pose stamped between frames
@@ -74,38 +77,41 @@ private:
   {
     return euclideanDistance(0, 0, next.pose.position.x, next.pose.position.y);
   }
-  //Publish values to cmd vel topic
-  //TODO: make the command vel topic a parameter
-  void publishCmdVel();
 
+  void publishCmdVel();
+  void publishZeroVelocity();
   //holonomic navigation
-  void moveHolon(double theta, double dist2GlobalGoal_);
+  void moveHolon(double theta, double dist2GlobalGoal_, double finalYaw);
   //Non-holonomic navigation(orientate the robot toward the next point and go ahead)
   void moveNonHolon(double angle2NextPoint_, double dist2GlobalGoal_);
   //The yaw is returned in degrees
   float getYawFromQuat(geometry_msgs::Quaternion quat);
 
-  ros::NodeHandle *nh;
-  ros::Publisher twist_pub, muving_state_pub, goal_reached_pub;
-  
-
-  bool holonomic;
-  bool finalOrientationOk;
+  int holonomic;
+  bool finalOrientationOk, homePublished, trajReceived;
 
   double Vx, Vy, Wz;
   double dist2GlobalGoal, dist2NextPoint;
-  float angle2NextPoint, angle2GlobalGoal;
 
+  float angle2NextPoint, angle2GlobalGoal;
   float angleMargin, distMargin;
   float angularMaxSpeed, linearMaxSpeedX, linearMaxSpeedY;
 
-  geometry_msgs::Twist vel;
-  SecurityMargin *margin;
-  sensor_msgs::LaserScan *laserScan1,*laserScan2;
-  PoseStamp globalGoalPose;
-  tf2_ros::Buffer *tfBuffer;
-  std_msgs::Bool muvingState, goalReached;
+  ros::NodeHandle *nh;
 
+  geometry_msgs::Twist vel;
+  geometry_msgs::PoseStamped globalGoal, globalGoalPose;
+
+  SecurityMargin *margin;
+
+  tf2_ros::Buffer *tfBuffer;
+
+  std_msgs::Bool muvingState, goalReached;
+  std_msgs::UInt8MultiArray red, green, blue, white;
+
+  ros::Publisher twist_pub, muving_state_pub, goal_reached_pub, goal_pub, leds_pub;
+
+  trajectory_msgs::MultiDOFJointTrajectoryPoint nextPoint;
 };
 
 } // namespace Navigators

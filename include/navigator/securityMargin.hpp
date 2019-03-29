@@ -22,64 +22,65 @@
 #include <trajectory_msgs/MultiDOFJointTrajectory.h>
 
 using namespace std;
-
-//Defines aqui
-//Aqui clases
+//Defines
+#define HOKUYO 721
 
 class SecurityMargin
 {
   typedef geometry_msgs::PoseStamped PoseStamp;
-  typedef visualization_msgs::MarkerArray RVizMarkerArray;
   typedef visualization_msgs::Marker RVizMarker;
 
 public:
-  //Default constructor: it set params to defaults values(see navigator.cpp)
+  //Default constructor: it set params to defaults values if nothing on the param server
   SecurityMargin(ros::NodeHandle *n);
-  /** 
-   * Constructor with parameters
-   * 
-   * @param onlyFront: to create only a security margin in the front, useful when the robot usually moves forward
-   * the full security margin is not implemented yet
-   * @param laserArrayMsgLen: the lenght of the .ranges array in the laser message dist2GlobalGoal
-   * @param f: f=1 security margin circle like, >1 ellipse like
-   * @param innerSecDist and extSecDist: The distances of the inner and exterior security margins
-   * @param laserSecurityAngle: Set to 0 if you want to check the full range of the laser array, the security angle reduces it
-   *   simmetrically. Ej: 10, the security margin will be checked between 10 and 170 degrees for a 180º laser(Hokuyo)
-  */
-  //It pases the params to the class variables
+
+  //It passes the params to the class variables
   void setParams(ros::NodeHandle *n);
-  //Builds the two security arrays and markers
-  void buildArrays();
   //Publish the rviz markers to visualize the security margin in RViz
   void publishRvizMarkers();
+  
   //Check if there is something inside the security area
-  bool checkObstacles(bool whichOne, sensor_msgs::LaserScan *scan1, sensor_msgs::LaserScan *scan2);
-  bool canIMove(sensor_msgs::LaserScan *scan1, sensor_msgs::LaserScan *scan2);
+  bool canIMove();
+
   //get values of booleans private variables
   bool dangerAreaFree();
   bool securityAreaFree();
+  //Lasers Callbacks
+  void laser1Callback(const sensor_msgs::LaserScanConstPtr &scan);
+  void laser2Callback(const sensor_msgs::LaserScanConstPtr &scan);
 
 private:
-  bool onlyFront; //TODO: implementar zonas de seguridad asimetricas delante y detras
+  //Builds the  security arrays and markers
+  void buildArrays();
+
+  bool checkObstacles(bool whichOne);
+
+  
+  bool laser1Got, laser2Got, lasersGot;
+  bool onlyFront;
   bool paramsConfigured;
-  //Dangerous area is the area inside the inner ellipse,
-  //securityArea is the area between extern and inner ellipse
+  bool red1,red2;
+  
   bool isInsideDangerousArea1, securityAreaOccup1;
   bool isInsideDangerousArea2, securityAreaOccup2;
+  bool pubMarkers;
 
-  int laserArrayMsgLen; //721 for hokuyo lasers
+  int frontLaserArrayMsgLen, backLaserArrayMsgLen; //721 for hokuyo lasers
+  int laserSecurityAngleFront, laserSecurityAngleBack;
   //f es la relacion entre el semieje menor y el semieje mayor de la elipse de seguridad,
   //es necesario en el caso de robots no simetricos como el ARCO y depende de su geometria
   //Mas redondo menor f y viceversa
-  float f;
-  float innerSecDist, extSecDist;
-  int laserSecurityAngle;
+  float f1, f2;
+  float innerSecDistFront, extSecDistFront, innerSecDistBack, extSecDistBack;
 
-  RVizMarker markerIntFr, markerExtFr, markerIntBack, markerExtBack;
-
-  ros::Publisher marker_pub;
   ros::NodeHandle *nh;
-
+  
+  sensor_msgs::LaserScanConstPtr laser1CPtr, laser2CPtr;
+  
+  RVizMarker markerIntFr, markerExtFr, markerIntBack, markerExtBack;
+  
+  ros::Publisher marker_fr_1_pub,marker_fr_2_pub,marker_rr_1_pub,marker_rr_2_pub;
+  
   vector<float> secArrayFr, secArrayExtFr, secArrayBack, secArrayExtBack;
 };
 
