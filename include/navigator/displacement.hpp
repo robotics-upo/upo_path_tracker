@@ -27,44 +27,95 @@
 
 using namespace std;
 
-//Defines aqui
-//Aqui clases
+
 namespace Navigators
 {
 
-//Typedefs aqui
+
 typedef geometry_msgs::PoseStamped PoseStamp;
 typedef visualization_msgs::Marker RVizMarker;
 
 class Displacement
 {
 public:
-  //Default constructor: you have to pass it the pointers to the objects neededs
+
+  /**
+   * Default constructor:
+   * @param *NodeHandle: Pointer to node handle use to publish to topics 
+   * @param *margin: Pointer to SecurityMargin object 
+   * @param *tfBuffer: Pointer to tf2 buffer 
+  **/
   Displacement(ros::NodeHandle *n, SecurityMargin *margin_, tf2_ros::Buffer *tfBuffer_);
-  //Navigate function rights now is only no - holonmic
+  
+  /**
+   *  Homing function to get to the dock and start charging 
+   *  Not working yet
+  **/
   void goHomeLab();
 
+  /**
+   * Make a aproximation manoeuvre smoothly
+   * @param *pose: Pointer to pose in map frame to get to
+   * @param isGoal: If true publish to the goal reached topic and change the flag to true once manouevre achieved
+   * @param isHome: True when used with the goHomeLab function, it should approximate backwards
+  **/
   void aproximateTo(geometry_msgs::PoseStamped *pose, bool isGoal, bool isHome);
 
+  /**
+   * Main function, it takes the next pose to go and pass it
+   * to the holonomic/no-holonomic navigastion functions
+   * @param isHome: To use when goHomeLab works
+  **/
   void navigate(bool isHome);
-  //void navigate(trajectory_msgs::MultiDOFJointTrajectoryPoint *nextPoint, PoseStamp *globalGoalMapFrame, bool isHome);
-  //get goal reached message flag value
-
+  
+  /**
+   * Return the value of goalReached flag
+   * @return goalReached.data
+  **/
   bool hasFinished();
 
+  /**
+   * Set the flag goalReached to the status_ given
+   * @param status_: If true, it changes goalReached to true and also publish zero velocity
+  **/
   void setGoalReachedFlag(bool status_);
-  //Functions to do a rotation in place, you can give it a quaternion or a yaw
+
+
+  /**
+   * Rotation in place functions. You can personalize what it does with the parameters
+   * @param q/yaw: Quaternion or yaw to to the rotation 
+   * @param goal: If true it changes the goal reached flag etc
+   * @parm pub: If false, the function only gives values to Wz and do not publish it
+   * @param speed: The top speed in radians we want 
+   * @param angleMargin_: The margin in degress to get the orientation. 10-15º is nice
+  **/
   void setRobotOrientation(geometry_msgs::Quaternion q, bool goal, bool pub, float speed, float angleMargin_);
   void setRobotOrientation(float finalYaw, bool goal, bool pub, float speed, float angleMargin_);
 
+  /**
+   * Callbacks to get the needed info 
+  **/
   void trajectoryCb(const trajectory_msgs::MultiDOFJointTrajectory::ConstPtr &trj);
   void globalGoalCb(const geometry_msgs::PoseStampedConstPtr &globGoal_);
 
 private:
-  //Transform pose stamped between frames
+
+  /**
+   * Functions use to transform mainly between map and base_link frames
+   * @param originalPose/point: The position we want to transform
+   * @param from: frame of the original pose/point
+   * @param to: frame in which we want the pose
+   * @return: pose stamped in the desired frame
+  **/
   PoseStamp transformPose(PoseStamp originalPose, std::string from, std::string to);
   PoseStamp transformPose(trajectory_msgs::MultiDOFJointTrajectoryPoint point, std::string from, std::string to);
-  //Distance calculation formulas for differents inputs
+  
+  /**
+   * Functions to help to calculate distances
+   * You can use pure coordinates, distance from two poses 
+   * or finally the distance from one pose to the origin
+   * @return distance 
+  **/
   inline double euclideanDistance(double x0, double y0, double x, double y)
   {
     return sqrt(pow(x - x0, 2) + pow(y - y0, 2));
@@ -78,42 +129,70 @@ private:
     return euclideanDistance(0, 0, next.pose.position.x, next.pose.position.y);
   }
 
+  /**
+   * As its name says, it publishes the Vx,Vy and Wz
+   * Also publishes to muving state topic as true if any of the velocity componentes are differents from zero
+   * and the goal reached topic. This two topics are mainly used by the ros_bridge to communicate with camunda
+  **/
   void publishCmdVel();
+
+  /**
+   * It puts Vx, Vy and Wz to zero and publish the twist messages,
+   * also publishes the muving state as false and the value of goal reached value at that moment 
+  **/
   void publishZeroVelocity();
-  //holonomic navigation
+
+  /**
+   * Holonomic displacement function, called by the navigate function
+   * @param theta: angle to the next point in radians
+   * @param dist2GlobalGoal_: Used to smooth the velocity as it arrives to the global goal
+   * @param finalYaw: If you want to force a final yaw
+  **/
   void moveHolon(double theta, double dist2GlobalGoal_, double finalYaw);
-  //Non-holonomic navigation(orientate the robot toward the next point and go ahead)
+
+  /**
+   * No-Holonomic displacement function, called by the navigate function
+   * @param angle2NextPoint_: Where is the next point to the base_link (radians)
+   * @param dist2GlobalGoal_: Used to smooth the velocity as it arrives to the global goal 
+  **/
   void moveNonHolon(double angle2NextPoint_, double dist2GlobalGoal_);
-  //The yaw is returned in degrees
+
+  /**
+   * Auxiliar function to get the yaw in degress from a quaternion
+   * @param quat: quaternion to get the yaw from
+  **/
   float getYawFromQuat(geometry_msgs::Quaternion quat);
 
-  int holonomic;
-  bool finalOrientationOk, homePublished, trajReceived;
 
-  double Vx, Vy, Wz;
-  double dist2GlobalGoal, dist2NextPoint;
+  /**    Variables    **/
 
-  float angle2NextPoint, angle2GlobalGoal;
-  float angleMargin, distMargin;
-  float angularMaxSpeed, linearMaxSpeedX, linearMaxSpeedY;
+  int holonomic;//1 o 0(true or false)
+  bool finalOrientationOk, homePublished, trajReceived;//Control flags
 
-  ros::NodeHandle *nh;
+  double Vx, Vy, Wz;//Velocity variables
+  double dist2GlobalGoal, dist2NextPoint;//Distances variables 
 
-  geometry_msgs::Twist vel;
-  geometry_msgs::PoseStamped globalGoal, globalGoalPose;
+  float angle2NextPoint, angle2GlobalGoal;//Angles variables
+  float angleMargin, distMargin;//Margins 
+  float angularMaxSpeed, linearMaxSpeedX, linearMaxSpeedY; //Top speeds 
 
-  SecurityMargin *margin;
+  ros::NodeHandle *nh; //Pointer to the node node handle
 
-  tf2_ros::Buffer *tfBuffer;
+  geometry_msgs::Twist vel; //The twist message that will be published
+  geometry_msgs::PoseStamped globalGoal, globalGoalPose; //global goal in base_link and map frame.It would be nice to rename
 
-  std_msgs::Bool muvingState, goalReached;
-  std_msgs::UInt8MultiArray red, green, blue, white;
+  SecurityMargin *margin;//Pointer to the security margin object used to evaluate if it can move
 
-  ros::Publisher twist_pub, muving_state_pub, goal_reached_pub, goal_pub, leds_pub;
+  tf2_ros::Buffer *tfBuffer;//Pointer to the tfBuffer created in the node
 
-  trajectory_msgs::MultiDOFJointTrajectoryPoint nextPoint;
+  std_msgs::Bool muvingState, goalReached; //Flags that will be published 
+  std_msgs::UInt8MultiArray red, green, blue, white; //Not used right know, maybe will be used to signalize the status of the robot with the leds
+
+  ros::Publisher twist_pub, muving_state_pub, goal_reached_pub, goal_pub, leds_pub; //Ros publishers 
+
+  trajectory_msgs::MultiDOFJointTrajectoryPoint nextPoint; //next point of the trajetory received
 };
 
-} // namespace Navigators
+} /*  namespace Navigators  */
 
-#endif
+#endif /* DISPLACEMENT_H_ */

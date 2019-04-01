@@ -21,9 +21,11 @@
 #include <trajectory_msgs/MultiDOFJointTrajectoryPoint.h>
 #include <trajectory_msgs/MultiDOFJointTrajectory.h>
 
-using namespace std;
 //Defines
 #define HOKUYO 721
+
+using namespace std;
+
 
 class SecurityMargin
 {
@@ -31,42 +33,82 @@ class SecurityMargin
   typedef visualization_msgs::Marker RVizMarker;
 
 public:
-  //Default constructor: it set params to defaults values if nothing on the param server
+
+  
+  /**
+   * Default constructor: It calls the setParams function and build the arrays of the 
+   * security margin If pubmarkers is true, it also publish the markers of the security arrays
+   * @param *n: pointer to a node handle
+  **/
   SecurityMargin(ros::NodeHandle *n);
 
-  //It passes the params to the class variables
+  /**
+   * Put to default the parameters values if any on the parameter server
+   * It also put the flags to their initial values and if pub markers is set 
+   * to true it initilize the markers messages
+   * @param *n: pointer to a node handle
+  **/
   void setParams(ros::NodeHandle *n);
-  //Publish the rviz markers to visualize the security margin in RViz
+
+  /**
+   * If only front is set to true, it only publishes the front security margin markers 
+  **/
   void publishRvizMarkers();
   
-  //Check if there is something inside the security area
+  /**
+   * This function plays the game. If something enter inside the inner margin(frontal or back) 
+   * it will be publishing false until the object or person has gone away further than the outer margin
+   * If there is something inside the outer margin but out of the inner, it will return true
+  **/
   bool canIMove();
 
-  //get values of booleans private variables
+  /**
+   * Get the dangerAreaFree status flag
+  **/
   bool dangerAreaFree();
+  
+  /**
+   * Get the security area status flag
+  **/
   bool securityAreaFree();
-  //Lasers Callbacks
+  
+  /**
+   * Callbacks to get the directly the laser information
+  **/
   void laser1Callback(const sensor_msgs::LaserScanConstPtr &scan);
   void laser2Callback(const sensor_msgs::LaserScanConstPtr &scan);
 
 private:
-  //Builds the  security arrays and markers
+
+  /**
+   * This function build the four security margins arrays and also 
+   * the marker of each one if pub markers is set to true
+  **/
   void buildArrays();
 
+  /**
+   * The main function that compares the arrays with the lasers messages data+
+   * @param whickOne: 1 to check the outer margins and 0 for the inner margin
+   * @return: true if something inside the selected area
+  **/
   bool checkObstacles(bool whichOne);
 
-  
-  bool laser1Got, laser2Got, lasersGot;
-  bool onlyFront;
+  /**     Variables      **/
+   
+  bool laser1Got, laser2Got, lasersGot;//lasers control flags
+  bool onlyFront;//To use only frontal security margin
   bool paramsConfigured;
-  bool red1,red2;
+  bool red1,red2;//Flux control in checkObstacles function
   
-  bool isInsideDangerousArea1, securityAreaOccup1;
+  bool isInsideDangerousArea1, securityAreaOccup1;//Information about the security status
   bool isInsideDangerousArea2, securityAreaOccup2;
   bool pubMarkers;
 
   int frontLaserArrayMsgLen, backLaserArrayMsgLen; //721 for hokuyo lasers
-  int laserSecurityAngleFront, laserSecurityAngleBack;
+  int laserSecurityAngleFront, laserSecurityAngleBack;//The angle to reduce the oppenning of the lasers data comparison
+  //if it set 10-20, then the margin will check between 10 and 170º of the laser array angles
+
+  
   //f es la relacion entre el semieje menor y el semieje mayor de la elipse de seguridad,
   //es necesario en el caso de robots no simetricos como el ARCO y depende de su geometria
   //Mas redondo menor f y viceversa

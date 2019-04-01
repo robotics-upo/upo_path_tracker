@@ -3,6 +3,7 @@
 
 SecurityMargin::SecurityMargin(ros::NodeHandle *n)
 {
+
     SecurityMargin::setParams(n);
 
     SecurityMargin::buildArrays();

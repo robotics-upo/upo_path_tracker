@@ -21,8 +21,8 @@ int main(int argc, char **argv)
     SecurityMargin securityMargin(&n);
     Navigators::Displacement despl(&n, &securityMargin, &tfBuffer);
 
-    ros::Subscriber laser_sub = n.subscribe("/scanFront", 1000, &SecurityMargin::laser1Callback, &securityMargin);
-    ros::Subscriber laser_sub2 = n.subscribe("/scanBackFiltered", 1000, &SecurityMargin::laser2Callback, &securityMargin);
+    ros::Subscriber laser_sub = n.subscribe("/scanFront", 1, &SecurityMargin::laser1Callback, &securityMargin);
+    ros::Subscriber laser_sub2 = n.subscribe("/scanBackFiltered", 1, &SecurityMargin::laser2Callback, &securityMargin);
     ros::Subscriber path_sub = n.subscribe("/trajectory_tracker/local_input_trajectory", 1, &Navigators::Displacement::trajectoryCb, &despl);
     ros::Subscriber global_goal_sub = n.subscribe("/move_base_simple/goal", 1, &Navigators::Displacement::globalGoalCb, &despl);
     //Homing under construction
