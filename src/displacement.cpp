@@ -8,6 +8,16 @@
 namespace Navigators
 {
 
+void Displacement::refreshParams()
+{
+    ros::param::get("/nav_node/holonomic", holonomic);
+    ros::param::get("/nav_node/do_navigate", do_navigate);
+    ros::param::get("/nav_node/angular_max_speed", angularMaxSpeed);
+    ros::param::get("/nav_node/linear_max_speed_x", linearMaxSpeedX);
+    ros::param::get("/nav_node/linear_max_speed_y", linearMaxSpeedY);
+    ros::param::get("/nav_node/angle_margin", angleMargin);
+    ros::param::get("/nav_node/dist_margin", distMargin);
+}
 //Displacement Class functions
 Displacement::Displacement(ros::NodeHandle *n, SecurityMargin *margin_, tf2_ros::Buffer *tfBuffer_)
 {
@@ -20,12 +30,13 @@ Displacement::Displacement(ros::NodeHandle *n, SecurityMargin *margin_, tf2_ros:
     goal_pub = nh->advertise<PoseStamp>("/move_base_simple/goal", 1); //Used for homing
     leds_pub = nh->advertise<std_msgs::UInt8MultiArray>("/idmind_sensors/set_leds", 10);
 
-    nh->param("/trajectory_tracker/holonomic", holonomic, (int)1);
-    nh->param("/trajectory_tracker/angular_max_speed", angularMaxSpeed, (float)0.5);
-    nh->param("/trajectory_tracker/linear_max_speed_x", linearMaxSpeedX, (float)0.3);
-    nh->param("/trajectory_tracker/linear_max_speed_y", linearMaxSpeedY, (float)0.2);
-    nh->param("/trajectory_tracker/angle_margin", angleMargin, (float)15);
-    nh->param("/trajectory_tracker/dist_margin", distMargin, (float)0.35);
+    nh->param("/nav_node/do_navigate", do_navigate, (bool)true);
+    nh->param("/nav_node/holonomic", holonomic, (bool)true);
+    nh->param("/nav_node/angular_max_speed", angularMaxSpeed, (float)0.5);
+    nh->param("/nav_node/linear_max_speed_x", linearMaxSpeedX, (float)0.3);
+    nh->param("/nav_node/linear_max_speed_y", linearMaxSpeedY, (float)0.2);
+    nh->param("/nav_node/angle_margin", angleMargin, (float)15);
+    nh->param("/nav_node/dist_margin", distMargin, (float)0.35);
 
     //Pointer to the security margin object createdÃ§
     margin = margin_;
@@ -142,9 +153,9 @@ void Displacement::aproximateTo(geometry_msgs::PoseStamped *pose, bool isGoal, b
     if (!isHome)
     {
         geometry_msgs::PoseStamped p;
-       
+
         p = transformPose(*pose, "map", "base_link");
-        
+
         Vx = p.pose.position.x;
         Vy = p.pose.position.y;
 
@@ -174,11 +185,13 @@ void Displacement::moveHolon(double theta, double dist2GlobalGoal_, double final
         Vx /= 2;
         Vy /= 2;
     }
-
-    if (fabs(theta) > 110 * M_PI / 180)
+    if (fabs(theta) > M_PI_2 - M_PI / 9 && fabs(theta) < M_PI_2 + M_PI / 9)
+    {
+    }
+    /*if (fabs(theta) > 110 * M_PI / 180)
     {
         Wz = angularMaxSpeed * theta / fabs(theta);
-    }
+    }*/
     else if (fabs(theta) > angleMargin * M_PI / 180)
     {
         Wz = angularMaxSpeed * theta / fabs(theta);
@@ -217,12 +230,12 @@ void Displacement::moveNonHolon(double angle2NextPoint_, double dist2GlobalGoal_
 
 void Displacement::navigate(bool isHome)
 {
-    if (trajReceived && !goalReached.data)
+    Displacement::refreshParams();
+    if (trajReceived && !goalReached.data && do_navigate)
     {
         Vx = 0;
         Vy = 0;
         Wz = 0;
-        
 
         PoseStamp nextPoseBlFrame;
 
@@ -295,9 +308,8 @@ void Displacement::publishCmdVel()
     muvingState.data = true;
 
     if (Vx == 0 && Vy == 0 && Wz == 0)
-        muvingState.data = false; 
+        muvingState.data = false;
 
-   
     if (margin->canIMove())
     {
         vel.angular.z = Wz;

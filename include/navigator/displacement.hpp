@@ -163,12 +163,16 @@ private:
   **/
   float getYawFromQuat(geometry_msgs::Quaternion quat);
 
-
+  /**
+   * Refresh new dynamically reconfigure set params
+   * 
+  **/
+  void refreshParams();
   /**    Variables    **/
 
-  int holonomic;//1 o 0(true or false)
+  bool holonomic;//1 o 0(true or false)
   bool finalOrientationOk, homePublished, trajReceived;//Control flags
-
+  bool do_navigate;
   double Vx, Vy, Wz;//Velocity variables
   double dist2GlobalGoal, dist2NextPoint;//Distances variables 
 

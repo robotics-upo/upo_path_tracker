@@ -24,6 +24,24 @@ void SecurityMargin::laser2Callback(const sensor_msgs::LaserScanConstPtr &scan)
     if (laser1Got)
         lasersGot = true;
 }
+void SecurityMargin::refreshParams(){
+
+    float laserSecurityAngleBack_, laserSecurityAngleFront_;
+
+    ros::param::get("nav_node/f_relationship_front", f1);
+    ros::param::get("nav_node/f_relationship_back", f2);
+    ros::param::get("nav_node/inner_radius_front", innerSecDistFront);
+    ros::param::get("nav_node/outer_radius_front", extSecDistFront);
+    ros::param::get("nav_node/inner_radius_back", innerSecDistBack);
+    ros::param::get("nav_node/outer_radius_back", extSecDistBack);
+    ros::param::get("nav_node/laser_security_angle_front", laserSecurityAngleFront_);
+    ros::param::get("nav_node/laser_security_angle_back", laserSecurityAngleBack_ );
+
+    laserSecurityAngleFront = ceil(laserSecurityAngleFront_ * (frontLaserArrayMsgLen / 180));
+    laserSecurityAngleBack = ceil(laserSecurityAngleBack_ * (backLaserArrayMsgLen / 180));
+    SecurityMargin::buildArrays();
+
+}
 void SecurityMargin::setParams(ros::NodeHandle *n)
 {
     nh = n;
@@ -35,18 +53,18 @@ void SecurityMargin::setParams(ros::NodeHandle *n)
 
     float laserSecurityAngleBack_, laserSecurityAngleFront_;
 
-    nh->param("security_margin/only_front", onlyFront, (bool)0);
-    nh->param("security_margin/front_laser_range_msg_length", frontLaserArrayMsgLen, (int)HOKUYO); //721 for hokuyo lasers by default
-    nh->param("security_margin/back_laser_range_msg_length", backLaserArrayMsgLen, (int)HOKUYO);   //721 for hokuyo lasers by default
-    nh->param("security_margin/f_relationship_front", f1, (float)1.6);
-    nh->param("security_margin/f_relationship_back", f2, (float)1.6);
-    nh->param("security_margin/inner_radius_front", innerSecDistFront, (float)0.6);
-    nh->param("security_margin/outer_radius_front", extSecDistFront, (float)1);
-    nh->param("security_margin/inner_radius_back", innerSecDistBack, (float)0.6);
-    nh->param("security_margin/outer_radius_back", extSecDistBack, (float)1);
-    nh->param("security_margin/publish_markers", pubMarkers, (bool)1);
-    nh->param("security_margin/laser_security_angle_front", laserSecurityAngleFront_, (float)15);
-    nh->param("security_margin/laser_security_angle_back", laserSecurityAngleBack_, (float)15);
+    nh->param("nav_node/only_front", onlyFront, (bool)0);
+    nh->param("nav_node/front_laser_range_msg_length", frontLaserArrayMsgLen, (int)HOKUYO); //721 for hokuyo lasers by default
+    nh->param("nav_node/back_laser_range_msg_length", backLaserArrayMsgLen, (int)HOKUYO);   //721 for hokuyo lasers by default
+    nh->param("nav_node/f_relationship_front", f1, (float)1.6);
+    nh->param("nav_node/f_relationship_back", f2, (float)1.6);
+    nh->param("nav_node/inner_radius_front", innerSecDistFront, (float)0.6);
+    nh->param("nav_node/outer_radius_front", extSecDistFront, (float)1);
+    nh->param("nav_node/inner_radius_back", innerSecDistBack, (float)0.6);
+    nh->param("nav_node/outer_radius_back", extSecDistBack, (float)1);
+    nh->param("nav_node/publish_markers", pubMarkers, (bool)1);
+    nh->param("nav_node/laser_security_angle_front", laserSecurityAngleFront_, (float)15);
+    nh->param("nav_node/laser_security_angle_back", laserSecurityAngleBack_, (float)15);
 
     laserSecurityAngleFront = ceil(laserSecurityAngleFront_ * (frontLaserArrayMsgLen / 180));
     laserSecurityAngleBack = ceil(laserSecurityAngleBack_ * (backLaserArrayMsgLen / 180));
@@ -140,14 +158,16 @@ void SecurityMargin::buildArrays()
         p.x = innerSecDistFront * cos(i / ((double)frontLaserArrayMsgLen) * M_PI - M_PI_2);
         p.y = f1 * innerSecDistFront * sin(i / ((double)frontLaserArrayMsgLen) * M_PI - M_PI_2);
         secArrayFr.push_back(sqrtf(p.x * p.x + p.y * p.y));
-        if (pubMarkers && ((int)i % 50) == 0)
+        if ((pubMarkers && ((int)i % 50) == 0 && i >= laserSecurityAngleFront && i <= frontLaserArrayMsgLen-laserSecurityAngleFront) 
+         || i == laserSecurityAngleFront || i == frontLaserArrayMsgLen -laserSecurityAngleFront)
             markerIntFr.points.push_back(p);
 
         p.x *= extSecDistFront / innerSecDistFront;
         p.y *= extSecDistFront / innerSecDistFront;
 
         secArrayExtFr.push_back(sqrtf(p.x * p.x + p.y * p.y));
-        if (pubMarkers && ((int)i % 50) == 0)
+        if ((pubMarkers && ((int)i % 50) == 0 && i >= laserSecurityAngleFront && i <= frontLaserArrayMsgLen-laserSecurityAngleFront) 
+         || i == laserSecurityAngleFront || i == frontLaserArrayMsgLen -laserSecurityAngleFront)
             markerExtFr.points.push_back(p);
     }
 
@@ -163,12 +183,14 @@ void SecurityMargin::buildArrays()
             p.x = innerSecDistBack * cos(i / ((double)backLaserArrayMsgLen) * M_PI - M_PI_2);
             p.y = f2 * innerSecDistBack * sin(i / ((double)backLaserArrayMsgLen) * M_PI - M_PI_2);
             secArrayBack.push_back(sqrtf(p.x * p.x + p.y * p.y));
-            if (pubMarkers && ((int)i % 50) == 0)
+            if ( (pubMarkers && ((int)i % 50) == 0 && i >= laserSecurityAngleBack && i <= backLaserArrayMsgLen-laserSecurityAngleBack) 
+            || i == laserSecurityAngleBack || i == backLaserArrayMsgLen -laserSecurityAngleBack)
                 markerIntBack.points.push_back(p);
 
             p.x *= extSecDistBack / innerSecDistBack;
             p.y *= extSecDistBack / innerSecDistBack;
-            if (pubMarkers && ((int)i % 50) == 0)
+            if ( (pubMarkers && ((int)i % 50) == 0 && i >= laserSecurityAngleBack && i <= backLaserArrayMsgLen-laserSecurityAngleBack) 
+            || i == laserSecurityAngleBack || i == backLaserArrayMsgLen -laserSecurityAngleBack)
                 markerExtBack.points.push_back(p);
 
             secArrayExtBack.push_back(sqrtf(p.x * p.x + p.y * p.y));
@@ -291,6 +313,8 @@ bool SecurityMargin::checkObstacles(bool whichOne)
 // And it keeps returning false until the object has gone away from the security area(outside the outer ellipse)
 bool SecurityMargin::canIMove()
 {
+    SecurityMargin::refreshParams();
+    
     if (pubMarkers)
         SecurityMargin::publishRvizMarkers();
         

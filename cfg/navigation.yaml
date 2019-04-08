@@ -1,15 +1,23 @@
-security_margin:
-  only_front: 1
+nav_node:
+  #First security margin configuration
+  #
+  only_front: 0
   laser_range_msg_length: 721
-  f_relationship: 1.6
-  inner_radius: 0.2
-  outer_radius: 0.6
-  laser_security_angle: 15
-
-trajectory_tracker:
-  holonomic: 1
-  angular_max_speed: 0.5
-  linear_max_speed_x: 0.3
-  linear_max_speed_y: 0.2
+  f_relationship_front: 1.2
+  f_relationship_back: 1.2
+  inner_radius_front: 0.35
+  outer_radius_front: 0.5
+  inner_radius_back: 0.1
+  outer_radius_back: 0.3
+  laser_security_angle_front: 15
+  laser_security_angle_back: 15
+  publish_markers: true
+  #Navigation parameters
+  holonomic: true
+  angular_max_speed: 1.2
+  linear_max_speed_x: 0.6
+  linear_max_speed_y: 0.6
   angle_margin: 15
-  dist_margin: 0.35
+  dist_margin: 0.15
+
+  #Both types of parameters should be under the same namespace in order to be dynamically reconfigurable from the same node

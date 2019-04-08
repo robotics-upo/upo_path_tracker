@@ -93,6 +93,12 @@ private:
   **/
   bool checkObstacles(bool whichOne);
 
+  /**
+   * Function used to refresh params when they are changed by dynamic reconfigure
+   * 
+  **/
+  void refreshParams();
+
   /**     Variables      **/
    
   bool laser1Got, laser2Got, lasersGot;//lasers control flags
