@@ -26,7 +26,6 @@
 
 using namespace std;
 
-
 class SecurityMargin
 {
   typedef geometry_msgs::PoseStamped PoseStamp;
@@ -105,7 +104,7 @@ private:
   bool onlyFront;//To use only frontal security margin
   bool paramsConfigured;
   bool red1,red2;//Flux control in checkObstacles function
-  
+  bool hard_stop_enabled;
   bool isInsideDangerousArea1, securityAreaOccup1;//Information about the security status
   bool isInsideDangerousArea2, securityAreaOccup2;
   bool pubMarkers;
@@ -128,7 +127,9 @@ private:
   RVizMarker markerIntFr, markerExtFr, markerIntBack, markerExtBack;
   
   ros::Publisher marker_fr_1_pub,marker_fr_2_pub,marker_rr_1_pub,marker_rr_2_pub;
-  
+  ros::Publisher stop;
+  std_msgs::Bool stop_msg;
+
   vector<float> secArrayFr, secArrayExtFr, secArrayBack, secArrayExtBack;
 };
 

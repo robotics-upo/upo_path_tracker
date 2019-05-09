@@ -9,6 +9,7 @@
 #include <ros/ros.h>
 #include <vector>
 #include <math.h>
+#include <limits>
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TransformStamped.h>
@@ -22,7 +23,7 @@
 #include <std_srvs/Trigger.h>
 #include <trajectory_msgs/MultiDOFJointTrajectoryPoint.h>
 #include <trajectory_msgs/MultiDOFJointTrajectory.h>
-
+#include <people_msgs/People.h>
 #include <navigator/securityMargin.hpp>
 
 using namespace std;
@@ -66,7 +67,7 @@ public:
    * to the holonomic/no-holonomic navigastion functions
    * @param isHome: To use when goHomeLab works
   **/
-  void navigate(bool isHome);
+  void navigate();
   
   /**
    * Return the value of goalReached flag
@@ -95,9 +96,10 @@ public:
   /**
    * Callbacks to get the needed info 
   **/
+  void trackedPersonCb(const people_msgs::People::ConstPtr &pl);
   void trajectoryCb(const trajectory_msgs::MultiDOFJointTrajectory::ConstPtr &trj);
   void globalGoalCb(const geometry_msgs::PoseStampedConstPtr &globGoal_);
-
+  void impossibleMoveCb(const std_msgs::Bool::ConstPtr &msg);
 private:
 
   /**
@@ -128,7 +130,23 @@ private:
   {
     return euclideanDistance(0, 0, next.pose.position.x, next.pose.position.y);
   }
+  /**
+   *  Aux function to get an angle in radians and viceversa
+   *  @angle to convert to radians
+  **/
+  inline float d2rad(float angle)
+  {
+    return angle/180*M_PI;
+  }
+  inline float rad2d(float angle){
+    return angle/M_PI*180;
+  }
 
+  void printPeople();
+  void computeDistanceToPeople();
+
+  bool someoneInFront();
+  bool someoneInFront(int vx, int vy);
   /**
    * As its name says, it publishes the Vx,Vy and Wz
    * Also publishes to muving state topic as true if any of the velocity componentes are differents from zero
@@ -142,32 +160,41 @@ private:
   **/
   void publishZeroVelocity();
 
+  void rotateToRefresh();
   /**
    * Holonomic displacement function, called by the navigate function
-   * @param theta: angle to the next point in radians
-   * @param dist2GlobalGoal_: Used to smooth the velocity as it arrives to the global goal
    * @param finalYaw: If you want to force a final yaw
   **/
-  void moveHolon(double theta, double dist2GlobalGoal_, double finalYaw);
-
+  void moveHolon(double finalYaw);
+  void moveHolonTest(double finalYaw);
   /**
    * No-Holonomic displacement function, called by the navigate function
-   * @param angle2NextPoint_: Where is the next point to the base_link (radians)
-   * @param dist2GlobalGoal_: Used to smooth the velocity as it arrives to the global goal 
   **/
-  void moveNonHolon(double angle2NextPoint_, double dist2GlobalGoal_);
-
+  void moveNonHolon();
+  void moveNonHolonTest();
   /**
    * Auxiliar function to get the yaw in degress from a quaternion
    * @param quat: quaternion to get the yaw from
   **/
   float getYawFromQuat(geometry_msgs::Quaternion quat);
 
+ 
   /**
    * Refresh new dynamically reconfigure set params
    * 
   **/
   void refreshParams();
+  /**
+   * Exponential speed calculator
+   * @max: speed at inf
+   * @exp_const: the decay constant
+   * @var: the variable to be function of
+   * v=max*(1-exp(-exp_cons*var))
+  **/
+  float getVel(float max, float exp_const, float var,int mode);
+
+
+
   /**    Variables    **/
 
   bool holonomic;//1 o 0(true or false)
@@ -178,7 +205,12 @@ private:
 
   float angle2NextPoint, angle2GlobalGoal;//Angles variables
   float angleMargin, distMargin;//Margins 
-  float angularMaxSpeed, linearMaxSpeedX, linearMaxSpeedY; //Top speeds 
+  float angularMaxSpeed, linearMaxSpeed; //Top speeds 
+
+  //Custom speed testing parameters
+  float v,a,b,old_b;
+
+  float startOrientateDist;
 
   ros::NodeHandle *nh; //Pointer to the node node handle
 
@@ -190,11 +222,28 @@ private:
   tf2_ros::Buffer *tfBuffer;//Pointer to the tfBuffer created in the node
 
   std_msgs::Bool muvingState, goalReached; //Flags that will be published 
-  std_msgs::UInt8MultiArray red, green, blue, white; //Not used right know, maybe will be used to signalize the status of the robot with the leds
+  
+  
+  //std_msgs::UInt8MultiArray red, green, blue, white; //Not used right know, maybe will be used to signalize the status of the robot with the leds
 
   ros::Publisher twist_pub, muving_state_pub, goal_reached_pub, goal_pub, leds_pub; //Ros publishers 
+  
+  people_msgs::People peopl;
+  std::map<string, pair<float, float>> dist2people; 
+  std::pair<string, pair<float,float>> closest;
+  float alpha;
 
   trajectory_msgs::MultiDOFJointTrajectoryPoint nextPoint; //next point of the trajetory received
+ 
+  float traj_timeout;
+  float delta;
+
+  std_msgs::Bool possible_to_move;
+  ros::Time start;
+  ros::Duration d;
+  float secs;
+
+
 };
 
 } /*  namespace Navigators  */

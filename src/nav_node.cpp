@@ -7,17 +7,24 @@
 #include <dynamic_reconfigure/server.h>
 #include <arco_path_tracker/navConfig.h>
 
+//Debug libs
+#include <ctime>
+#include <std_msgs/Int32.h>
+#include <sys/timeb.h>
+
+//#define Debug
+
+//Homing under construction
 bool go_home;
 
 void callback(arco_path_tracker::navConfig &config, uint32_t level);
 void goHomeCb(const std_msgs::Bool &msg);
-//Other stuff
+
 tf2_ros::Buffer tfBuffer;
 
 int main(int argc, char **argv)
 {
-    string node_name = "nav_node";
-    ros::init(argc, argv, node_name);
+    ros::init(argc, argv, "nav_node");
     ros::NodeHandle n;
 
     tf2_ros::TransformListener tfListener(tfBuffer);
@@ -31,7 +38,15 @@ int main(int argc, char **argv)
     ros::Subscriber global_goal_sub = n.subscribe("/move_base_simple/goal", 1, &Navigators::Displacement::globalGoalCb, &despl);
     //Homing under construction
     ros::Subscriber goHome = n.subscribe("/trajectory_tracker/go_home", 1, goHomeCb);
+    ros::Subscriber people = n.subscribe("/people", 1, &Navigators::Displacement::trackedPersonCb, &despl);
+    ros::Subscriber imp = n.subscribe("/trajectory_tracker/impossible_to_find",1, &Navigators::Displacement::impossibleMoveCb, &despl);
 
+#ifdef DEBUG
+    ros::Publisher plan_time = n.advertise<std_msgs::Int32>("/nav_loop_times", 1000);
+    float seconds, milliseconds;
+    std_msgs::Int32 msg;
+    struct timeb startT, finishT;
+#endif
     ros::Rate loop_rate(40);
 
     //Dynamic reconfigure
@@ -43,21 +58,30 @@ int main(int argc, char **argv)
 
     while (ros::ok())
     {
-        ros::spinOnce();
-        
-        securityMargin.canIMove();
+    
+#ifdef DEBUG
+      ftime(&startT);
+#endif
+      ros::spinOnce();
+    
+      securityMargin.canIMove();
 
-        despl.navigate(0);        
+      despl.navigate();      
 
-        loop_rate.sleep();
+#ifdef DEBUG
+      ftime(&finishT);
+      seconds = finishT.time - startT.time - 1;
+      milliseconds = (1000 - startT.millitm) + finishT.millitm;
+      msg.data = (milliseconds + seconds * 1000);
+      plan_time.publish(msg);
+#endif
+      loop_rate.sleep();
     }
 
     return 0;
 }
 void callback(arco_path_tracker::navConfig &config, uint32_t level) {
-  /*ROS_INFO("Reconfigure Request: %d %f %s %s %d", 
-            config.double_param, 
-            config.size);*/
+
 }
 void goHomeCb(const std_msgs::Bool &msg)
 {

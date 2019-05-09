@@ -36,7 +36,9 @@ void SecurityMargin::refreshParams(){
     ros::param::get("nav_node/outer_radius_back", extSecDistBack);
     ros::param::get("nav_node/laser_security_angle_front", laserSecurityAngleFront_);
     ros::param::get("nav_node/laser_security_angle_back", laserSecurityAngleBack_ );
-
+    ros::param::get("nav_node/only_front", onlyFront);
+    ros::param::get("nav_node/hard_stop_enabled", hard_stop_enabled);
+    
     laserSecurityAngleFront = ceil(laserSecurityAngleFront_ * (frontLaserArrayMsgLen / 180));
     laserSecurityAngleBack = ceil(laserSecurityAngleBack_ * (backLaserArrayMsgLen / 180));
     SecurityMargin::buildArrays();
@@ -50,6 +52,7 @@ void SecurityMargin::setParams(ros::NodeHandle *n)
     marker_fr_2_pub = nh->advertise<visualization_msgs::Marker>("/securityDistMarkersFr2", 0);
     marker_rr_1_pub = nh->advertise<visualization_msgs::Marker>("/securityDistMarkersRr1", 0);
     marker_rr_2_pub = nh->advertise<visualization_msgs::Marker>("/securityDistMarkersRr2", 0);
+    stop = nh->advertise<std_msgs::Bool>("/security_stop",0);
 
     float laserSecurityAngleBack_, laserSecurityAngleFront_;
 
@@ -65,10 +68,12 @@ void SecurityMargin::setParams(ros::NodeHandle *n)
     nh->param("nav_node/publish_markers", pubMarkers, (bool)1);
     nh->param("nav_node/laser_security_angle_front", laserSecurityAngleFront_, (float)15);
     nh->param("nav_node/laser_security_angle_back", laserSecurityAngleBack_, (float)15);
+    nh->param("nav_node/hard_stop_enabled", hard_stop_enabled, (bool)1);
 
     laserSecurityAngleFront = ceil(laserSecurityAngleFront_ * (frontLaserArrayMsgLen / 180));
     laserSecurityAngleBack = ceil(laserSecurityAngleBack_ * (backLaserArrayMsgLen / 180));
     
+   
     //Control flags
     isInsideDangerousArea1 = false;
     securityAreaOccup1 = false;
@@ -140,7 +145,6 @@ void SecurityMargin::setParams(ros::NodeHandle *n)
         markerExtBack.color.b = 0.0;
     }
 }
-
 void SecurityMargin::buildArrays()
 {
     double x, y;
@@ -197,7 +201,6 @@ void SecurityMargin::buildArrays()
         }
     }
 }
-
 void SecurityMargin::publishRvizMarkers()
 {
     marker_fr_1_pub.publish(markerIntFr);
@@ -306,6 +309,7 @@ bool SecurityMargin::checkObstacles(bool whichOne)
             }
         }
     }
+   
     return false;
 }
 //This functions will use check obstacles function
@@ -314,28 +318,42 @@ bool SecurityMargin::checkObstacles(bool whichOne)
 bool SecurityMargin::canIMove()
 {
     SecurityMargin::refreshParams();
-    
+
+
     if (pubMarkers)
         SecurityMargin::publishRvizMarkers();
         
-    if (checkObstacles(0))
+    if (checkObstacles(0)){
+        if(!stop_msg.data){
+            stop_msg.data = true;
+            stop.publish(stop_msg);
+        }
+        
         return false;
+    }
 
     if (!SecurityMargin::securityAreaFree())
     {
         if (checkObstacles(1))
         {
+            if(!stop_msg.data){
+                stop_msg.data = true;
+                stop.publish(stop_msg);
+            }
+
             return false;
         }
     }
-
+    if(stop_msg.data){
+        stop_msg.data = false;
+        stop.publish(stop_msg);
+    }
     return true;
 }
 bool SecurityMargin::dangerAreaFree()
 {
     return isInsideDangerousArea1 || isInsideDangerousArea2;
 }
-
 bool SecurityMargin::securityAreaFree()
 {
     return !(securityAreaOccup1 || securityAreaOccup2);
