@@ -3,19 +3,9 @@ nav_node:
   #
   robot_base_frame: base_link
   world_frame: map
-  only_front: true
-  front_laser_range_msg_length: 1428 #931
-  back_laser_range_msg_length: 803
-  f_relationship_front: 1.2
-  f_relationship_back: 1.2
-  inner_radius_front: 0.25 #0.45
-  outer_radius_front: 0.4 #0.55 these two works good in open areas
-  inner_radius_back: 0.1
-  outer_radius_back: 0.3
-  laser_security_angle_front: 25
-  laser_security_angle_back: 40
-  publish_markers: true
-  hard_stop_enabled: false
+
+
+
   #Navigation parameters
   holonomic: true
   angular_max_speed: 0.5
@@ -25,14 +15,32 @@ nav_node:
   traj_timeout: 0.8 #0.025
   a: 1 # for no holonomic 2 its okey with the 1.5 rad/s speed
   b: 5
+  
   start_orientate_dist: 1.0
   min_angle_laser_1: -3.1400001049
   min_angle_laser_2: -1.30027031898
   step_laser: 0.00439999997616
+  
+  security_margin:  
+    only_front: true
+    front_laser_range_msg_length: 1428 #931
+    back_laser_range_msg_length: 803
+    f_relationship_front: 1.2
+    f_relationship_back: 1.2
+    inner_radius_front: 0.25 #0.45
+    outer_radius_front: 0.4 #0.55 these two works good in open areas
+    inner_radius_back: 0.1
+    outer_radius_back: 0.3
 
-  square_security_area:
-     
-    margin_y: 0.3
-    margin_x: 0.3
-    delta_d: 0.15
+    laser_security_angle_front: 25
+    laser_security_angle_back: 40
+
+    publish_markers: true
+    hard_stop_enabled: false
+
+    square_security_area:
+
+      margin_y: 0.3
+      margin_x: 0.3
+      delta_d: 0.15
   #Both types of parameters should be under the same namespace in order to be dynamically reconfigurable from the same node
