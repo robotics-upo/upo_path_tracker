@@ -49,12 +49,6 @@ public:
   Displacement(ros::NodeHandle *n, SecurityMargin *margin_, tf2_ros::Buffer *tfBuffer_);
   
   /**
-   *  Homing function to get to the dock and start charging 
-   *  Not working yet
-  **/
-  void goHomeLab();
-
-  /**
    * Make a aproximation manoeuvre smoothly
    * @param *pose: Pointer to pose in map frame to get to
    * @param isGoal: If true publish to the goal reached topic and change the flag to true once manouevre achieved
@@ -161,7 +155,6 @@ private:
   **/
   void publishZeroVelocity();
 
-  void rotateToRefresh();
   /**
    * Holonomic displacement function, called by the navigate function
    * @param finalYaw: If you want to force a final yaw
@@ -192,7 +185,7 @@ private:
    * @var: the variable to be function of
    * v=max*(1-exp(-exp_cons*var))
   **/
-  float getVel(float max, float exp_const, float var,int mode);
+  float getVel(float max, float exp_const, float var);
 
 
 

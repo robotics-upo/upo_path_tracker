@@ -86,14 +86,19 @@ private:
    * This function build the four security margins arrays and also 
    * the marker of each one if pub markers is set to true
   **/
-  void buildArrays();
-
   void buildArraysSquare2(vector<float> *array, RVizMarker *marker, bool ext);
   /**
    * 
    * 
+   * 
   **/
-  void buildArraysSquare(vector<float> *array,RVizMarker *marker, bool ext, bool fr);
+  void buildElliptic();
+  /**
+   * 
+   * 
+   * 
+  **/
+  void buildArrays();
   /**
    * The main function that compares the arrays with the lasers messages data+
    * @param whickOne: 1 to check the outer margins and 0 for the inner margin
@@ -122,31 +127,27 @@ private:
   int laserSecurityAngleFront, laserSecurityAngleBack;//The angle to reduce the oppenning of the lasers data comparison
   //if it set 10-20, then the margin will check between 10 and 170º of the laser array angles
 
-  
   //f es la relacion entre el semieje menor y el semieje mayor de la elipse de seguridad,
   //es necesario en el caso de robots no simetricos como el ARCO y depende de su geometria
   //Mas redondo menor f y viceversa
   float f1, f2;
   float innerSecDistFront, extSecDistFront, innerSecDistBack, extSecDistBack;
-
+  
+  vector<float> secArrayFr, secArrayExtFr, secArrayBack, secArrayExtBack;
+  
+  //Variables used in the square security area
+  float margin_y,margin_x,delta_d;
+  
   ros::NodeHandle *nh;
   
   sensor_msgs::LaserScanConstPtr laser1CPtr, laser2CPtr;
   
   RVizMarker markerIntFr, markerExtFr, markerIntBack, markerExtBack;
   
-  ros::Publisher marker_fr_1_pub,marker_fr_2_pub,marker_rr_1_pub,marker_rr_2_pub;
-  ros::Publisher stop;
+  ros::Publisher marker_fr_1_pub,marker_fr_2_pub,marker_rr_1_pub,marker_rr_2_pub, stop;
+  
   std_msgs::Bool stop_msg;
 
-  vector<float> secArrayFr, secArrayExtFr, secArrayBack, secArrayExtBack;
-  double l1_angle_i, l2_angle_i;
-  double l1_lenght, l2_lenght;
-  double l1_angle_min, l2_angle_min;
-  //
-  float h1,h2,w,delta_d;
-
-  float margin_y,margin_x;
 };
 
 #endif

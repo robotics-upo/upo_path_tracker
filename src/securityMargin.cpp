@@ -3,10 +3,8 @@
 
 SecurityMargin::SecurityMargin(ros::NodeHandle *n)
 {
-
     SecurityMargin::setParams(n);
-
-   
+  
     SecurityMargin::buildArraysSquare2(&secArrayFr, &markerIntFr,0);
     SecurityMargin::buildArraysSquare2(&secArrayExtFr, &markerExtFr,1);
     
@@ -17,9 +15,6 @@ void SecurityMargin::laser1Callback(const sensor_msgs::LaserScanConstPtr &scan) 
 {
     laser1CPtr = scan;
 
-    l1_angle_i = scan->angle_increment;
-    l1_angle_min = scan->angle_min;
-    l1_lenght = scan->ranges.size();
     laser1Got = true;
     if (laser2Got)
         lasersGot = true;
@@ -27,10 +22,8 @@ void SecurityMargin::laser1Callback(const sensor_msgs::LaserScanConstPtr &scan) 
 void SecurityMargin::laser2Callback(const sensor_msgs::LaserScanConstPtr &scan) //Rear
 {
     laser2CPtr = scan;
+
     laser2Got = true;
-    l2_angle_i = scan->angle_increment;
-    l2_angle_min = scan->angle_min;
-    l2_lenght = scan->ranges.size();
     if (laser1Got)
         lasersGot = true;
 }
@@ -39,16 +32,16 @@ void SecurityMargin::refreshParams()
 
     float laserSecurityAngleBack_, laserSecurityAngleFront_;
 
-    ros::param::get("nav_node/f_relationship_front", f1);
-    ros::param::get("nav_node/f_relationship_back", f2);
-    ros::param::get("nav_node/inner_radius_front", innerSecDistFront);
-    ros::param::get("nav_node/outer_radius_front", extSecDistFront);
-    ros::param::get("nav_node/inner_radius_back", innerSecDistBack);
-    ros::param::get("nav_node/outer_radius_back", extSecDistBack);
-    ros::param::get("nav_node/laser_security_angle_front", laserSecurityAngleFront_);
-    ros::param::get("nav_node/laser_security_angle_back", laserSecurityAngleBack_);
-    ros::param::get("nav_node/only_front", onlyFront);
-    ros::param::get("nav_node/hard_stop_enabled", hard_stop_enabled);
+    ros::param::get("nav_node/security_margin/f_relationship_front", f1);
+    ros::param::get("nav_node/security_margin/f_relationship_back", f2);
+    ros::param::get("nav_node/security_margin/inner_radius_front", innerSecDistFront);
+    ros::param::get("nav_node/security_margin/outer_radius_front", extSecDistFront);
+    ros::param::get("nav_node/security_margin/inner_radius_back", innerSecDistBack);
+    ros::param::get("nav_node/security_margin/outer_radius_back", extSecDistBack);
+    ros::param::get("nav_node/security_margin/laser_security_angle_front", laserSecurityAngleFront_);
+    ros::param::get("nav_node/security_margin/laser_security_angle_back", laserSecurityAngleBack_);
+    ros::param::get("nav_node/security_margin/only_front", onlyFront);
+    ros::param::get("nav_node/security_margin/hard_stop_enabled", hard_stop_enabled);
     
     laserSecurityAngleFront = ceil(laserSecurityAngleFront_ * (frontLaserArrayMsgLen / 180));
     laserSecurityAngleBack = ceil(laserSecurityAngleBack_ * (backLaserArrayMsgLen / 180));
@@ -65,29 +58,22 @@ void SecurityMargin::setParams(ros::NodeHandle *n)
 
     float laserSecurityAngleBack_, laserSecurityAngleFront_;
 
-    nh->param("nav_node/only_front", onlyFront, (bool)0);
-    nh->param("nav_node/front_laser_range_msg_length", frontLaserArrayMsgLen, (int)HOKUYO); //721 for hokuyo lasers by default
-    nh->param("nav_node/back_laser_range_msg_length", backLaserArrayMsgLen, (int)HOKUYO);   //721 for hokuyo lasers by default
-    nh->param("nav_node/f_relationship_front", f1, (float)1.6);
-    nh->param("nav_node/f_relationship_back", f2, (float)1.6);
-    nh->param("nav_node/inner_radius_front", innerSecDistFront, (float)0.6);
-    nh->param("nav_node/outer_radius_front", extSecDistFront, (float)1);
-    nh->param("nav_node/inner_radius_back", innerSecDistBack, (float)0.6);
-    nh->param("nav_node/outer_radius_back", extSecDistBack, (float)1);
-    nh->param("nav_node/publish_markers", pubMarkers, (bool)1);
-    nh->param("nav_node/laser_security_angle_front", laserSecurityAngleFront_, (float)15);
-    nh->param("nav_node/laser_security_angle_back", laserSecurityAngleBack_, (float)15);
-    nh->param("nav_node/hard_stop_enabled", hard_stop_enabled, (bool)1);
-    nh->param("nav_node/min_angle_laser_1", l1_angle_min, (double)-1.57);
-    nh->param("nav_node/min_angle_laser_2", l2_angle_min, (double)-1.57);
-    nh->param("nav_node/step_laser",l1_angle_i, (double)0.004);
-    nh->param("nav_node/square_security_area/h1",h1,(float)0.2);
-    nh->param("nav_node/square_security_area/width",w,(float)0.2);
-    nh->param("nav_node/square_security_area/h2",h2,(float)0.2 );
-    nh->param("nav_node/square_security_area/delta_d",delta_d,(float)0.15 );
-    nh->param("nav_node/square_security_area/margin_x",margin_x,(float)0.5 );
-    nh->param("nav_node/square_security_area/margin_y",margin_y,(float)0.5 );
-    l2_angle_i = l1_angle_i;
+    nh->param("nav_node/security_margin/only_front", onlyFront, (bool)0);
+    nh->param("nav_node/security_margin/front_laser_range_msg_length", frontLaserArrayMsgLen, (int)HOKUYO); //721 for hokuyo lasers by default
+    nh->param("nav_node/security_margin/back_laser_range_msg_length", backLaserArrayMsgLen, (int)HOKUYO);   //721 for hokuyo lasers by default
+    nh->param("nav_node/security_margin/f_relationship_front", f1, (float)1.6);
+    nh->param("nav_node/security_margin/f_relationship_back", f2, (float)1.6);
+    nh->param("nav_node/security_margin/inner_radius_front", innerSecDistFront, (float)0.6);
+    nh->param("nav_node/security_margin/outer_radius_front", extSecDistFront, (float)1);
+    nh->param("nav_node/security_margin/inner_radius_back", innerSecDistBack, (float)0.6);
+    nh->param("nav_node/security_margin/outer_radius_back", extSecDistBack, (float)1);
+    nh->param("nav_node/security_margin/publish_markers", pubMarkers, (bool)1);
+    nh->param("nav_node/security_margin/laser_security_angle_front", laserSecurityAngleFront_, (float)15);
+    nh->param("nav_node/security_margin/laser_security_angle_back", laserSecurityAngleBack_, (float)15);
+    nh->param("nav_node/security_margin/hard_stop_enabled", hard_stop_enabled, (bool)1);
+    nh->param("nav_node/security_margin/square_security_area/delta_d",delta_d,(float)0.15 );
+    nh->param("nav_node/security_margin/square_security_area/margin_x",margin_x,(float)0.5 );
+    nh->param("nav_node/security_margin/square_security_area/margin_y",margin_y,(float)0.5 );
     laserSecurityAngleFront = ceil(laserSecurityAngleFront_ * (frontLaserArrayMsgLen / 180));
     laserSecurityAngleBack = ceil(laserSecurityAngleBack_ * (backLaserArrayMsgLen / 180));
 
@@ -255,7 +241,6 @@ void SecurityMargin::buildArraysSquare2(vector<float> *array, RVizMarker *marker
     }
     for(int i = n1; i > 0; i--){
         array->push_back(a1.at(i-1));
-         //ROS_WARN("%.2f", a1.at(i-1));
     }
     while(array->size() < frontLaserArrayMsgLen){
         array->push_back(0); 
@@ -277,17 +262,36 @@ void SecurityMargin::buildArraysSquare2(vector<float> *array, RVizMarker *marker
     marker->points.push_back(p);
   
 }
+void SecurityMargin::buildElliptic(){
+    double x, y;
+    geometry_msgs::Point p;
+    p.z = 0;
+    for (double i = 0; i < frontLaserArrayMsgLen; i++)
+    {
+        p.x = innerSecDistFront * cos(i / ((double)frontLaserArrayMsgLen) * M_PI );
+        p.y = f1 * innerSecDistFront * sin(i / ((double)frontLaserArrayMsgLen) * M_PI );
+        secArrayFr.push_back(sqrtf(p.x * p.x + p.y * p.y));
+        
+        if ((pubMarkers && ((int)i % 50) == 0 && i >= laserSecurityAngleFront && i <= frontLaserArrayMsgLen - laserSecurityAngleFront) || i == laserSecurityAngleFront || i == frontLaserArrayMsgLen - laserSecurityAngleFront)
+            markerIntFr.points.push_back(p);
+
+        p.x *= extSecDistFront / innerSecDistFront;
+        p.y *= extSecDistFront / innerSecDistFront;
+
+        secArrayExtFr.push_back(sqrtf(p.x * p.x + p.y * p.y));
+        if ((pubMarkers && ((int)i % 50) == 0 && i >= laserSecurityAngleFront && i <= frontLaserArrayMsgLen - laserSecurityAngleFront) || i == laserSecurityAngleFront || i == frontLaserArrayMsgLen - laserSecurityAngleFront)
+            markerExtFr.points.push_back(p);
+    }
+}
 void SecurityMargin::buildArrays()
 {
     double x, y;
     geometry_msgs::Point p;
-    p.z = 0;
     if (pubMarkers)
     {
         markerIntFr.points.clear();
         markerExtFr.points.clear();
     }
-    int it = 0;
 
     for (double i = 0; i < frontLaserArrayMsgLen; i++)
     {

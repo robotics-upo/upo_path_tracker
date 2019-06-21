@@ -14,11 +14,8 @@
 
 //#define Debug
 
-//Homing under construction
-bool go_home;
 
 void callback(arco_path_tracker::navConfig &config, uint32_t level);
-void goHomeCb(const std_msgs::Bool &msg);
 
 tf2_ros::Buffer tfBuffer;
 
@@ -37,17 +34,18 @@ int main(int argc, char **argv)
     ros::Subscriber path_sub = n.subscribe("/trajectory_tracker/local_input_trajectory", 1, &Navigators::Displacement::trajectoryCb, &despl);
     ros::Subscriber global_goal_sub = n.subscribe("/move_base_simple/goal", 1, &Navigators::Displacement::globalGoalCb, &despl);
     //Homing under construction
-    ros::Subscriber goHome = n.subscribe("/trajectory_tracker/go_home", 1, goHomeCb);
     ros::Subscriber people = n.subscribe("/people", 1, &Navigators::Displacement::trackedPersonCb, &despl);
     ros::Subscriber imp = n.subscribe("/trajectory_tracker/impossible_to_find",1, &Navigators::Displacement::impossibleMoveCb, &despl);
     ros::Subscriber local_goal_occ_sub = n.subscribe("/trajectory_tracker/local_goal_occupied", 1, &Navigators::Displacement::occLocalGoalCb, &despl);
 
 #ifdef DEBUG
-    ros::Publisher plan_time = n.advertise<std_msgs::Int32>("/nav_loop_times", 1000);
+    ros::Publisher period_pub = n.advertise<std_msgs::Int32>("/nav_loop_times", 1);
     float seconds, milliseconds;
     std_msgs::Int32 msg;
     struct timeb startT, finishT;
 #endif
+
+
     ros::Rate loop_rate(40);
 
     //Dynamic reconfigure
@@ -74,7 +72,7 @@ int main(int argc, char **argv)
       seconds = finishT.time - startT.time - 1;
       milliseconds = (1000 - startT.millitm) + finishT.millitm;
       msg.data = (milliseconds + seconds * 1000);
-      plan_time.publish(msg);
+      period_pub.publish(msg);
 #endif
       loop_rate.sleep();
     }
@@ -83,8 +81,4 @@ int main(int argc, char **argv)
 }
 void callback(arco_path_tracker::navConfig &config, uint32_t level) {
 
-}
-void goHomeCb(const std_msgs::Bool &msg)
-{
-    go_home = msg.data;
 }
