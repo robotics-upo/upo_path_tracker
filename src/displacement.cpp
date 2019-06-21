@@ -40,7 +40,7 @@ void Displacement::refreshParams()
 
     if(closest.second.first < 1.5){
         b = old_b*closest.second.first/1.5;
-        //ROS_WARN("B: %.2f",b);
+        //ROS_WARN_THROTTLE(0.5,"B: %.2f",b);
     }
     //ros::param::set("/nav_node/b", b);
     //printf("\n The closest person is %s, %.2f m away from arco", closest.first.c_str(), closest.second);
@@ -71,27 +71,27 @@ Displacement::Displacement(ros::NodeHandle *n, SecurityMargin *margin_, tf2_ros:
     nh->param("/nav_node/b", b, (float)5);
     nh->param("/nav_node/traj_timeout",traj_timeout , (float)0.025);
     nh->param("/nav_node/start_orientate_dist",startOrientateDist , (float)0.025);
+    nh->param("/nav_node/robot_base_frame", robot_frame, (string)"base_link");
+    nh->param("/nav_node/world_frame", world_frame, (string)"map");
     old_b = b;
     possible_to_move.data = true;
-    if(!holonomic){
-
-        angleMargin = 10;
-        traj_timeout = 0.275;
-        b = 2;
-        a = 2;
-        linearMaxSpeed = 1;
-    
-    }else{
-        startOrientateDist = 1;
-        b = 3;
-        linearMaxSpeed = 1;
-    }
+    localGoalOcc.data = false;
     alpha = 30;
     //By default we havent arrive anywhere at start
     goalReached.data = false;
     homePublished = false;
     trajReceived = false;
+    aproxComplete = false;
 
+    aproxComplete = false;
+    tr0_catch = false;
+
+}
+void Displacement::occLocalGoalCb(const std_msgs::Bool::ConstPtr &msg){
+    localGoalOcc = *msg;
+    if(localGoalOcc.data){
+        Displacement::publishZeroVelocity();
+    }
 }
 void Displacement::impossibleMoveCb(const std_msgs::Bool::ConstPtr &msg){
     possible_to_move = *msg;
@@ -105,6 +105,7 @@ void Displacement::trackedPersonCb(const people_msgs::People::ConstPtr &pl){
 void Displacement::trajectoryCb(const trajectory_msgs::MultiDOFJointTrajectory::ConstPtr &trj)
 {
     trajReceived = true;
+    ros::param::get("/nav_node/traj_timeout", traj_timeout);
     //goalReached.data = false;
     
     delta = ros::Time::now().toSec()- trj->header.stamp.toSec();
@@ -118,6 +119,7 @@ void Displacement::trajectoryCb(const trajectory_msgs::MultiDOFJointTrajectory::
 void Displacement::globalGoalCb(const geometry_msgs::PoseStampedConstPtr &globGoal_)
 {
     goalReached.data = false;
+    aproxComplete = false;
     globalGoal = *globGoal_;
 }
 void Displacement::setRobotOrientation(geometry_msgs::Quaternion q, bool goal, bool pub, float speed, float angleMargin_)
@@ -130,7 +132,7 @@ void Displacement::setRobotOrientation(float finalYaw, bool goal, bool pub, floa
     //also in the map frame
 
     PoseStamp robotPose;
-    robotPose.header.frame_id = "base_link";
+    robotPose.header.frame_id = robot_frame;
     robotPose.header.stamp = ros::Time(0);
     robotPose.header.seq = rand();
 
@@ -140,7 +142,7 @@ void Displacement::setRobotOrientation(float finalYaw, bool goal, bool pub, floa
 
     robotPose.pose.orientation.w = 1;
 
-    robotPose = Displacement::transformPose(robotPose, "base_link", "map");
+    robotPose = Displacement::transformPose(robotPose, robot_frame, world_frame);
     float robotYaw = Displacement::getYawFromQuat(robotPose.pose.orientation);
 
     if (robotYaw < 0)
@@ -166,6 +168,7 @@ void Displacement::setRobotOrientation(float finalYaw, bool goal, bool pub, floa
     else if (goal)
     {
         Displacement::setGoalReachedFlag(1);
+        traj_timeout = std::numeric_limits<float>::max();
         //ROS_WARN("LLegamos baby");
     }
 
@@ -180,7 +183,7 @@ void Displacement::goHomeLab()
     if (!homePublished) //HomePublished flag is used to publish home position only once
     {
         PoseStamp home;
-        home.header.frame_id = "map";
+        home.header.frame_id = world_frame;
         home.header.seq = rand();
         home.header.stamp = ros::Time(0);
 
@@ -199,12 +202,12 @@ void Displacement::aproximateTo(geometry_msgs::PoseStamped *pose, bool isGoal, b
 {
     //if (!isHome)
     //{
-    geometry_msgs::PoseStamped p = transformPose(*pose, "map", "base_link");
+    geometry_msgs::PoseStamped p = transformPose(*pose, world_frame, robot_frame);
     
     Vx = p.pose.position.x;
     Vy = p.pose.position.y;
     
-    Displacement::setRobotOrientation(getYawFromQuat(pose->pose.orientation), isGoal, 0, 1.2*angularMaxSpeed, angleMargin);
+    Displacement::setRobotOrientation(getYawFromQuat(pose->pose.orientation), isGoal, 0, 1.7*angularMaxSpeed, angleMargin);
     Displacement::publishCmdVel();
     /*if(Wz < 0.01){
         Displacement::setGoalReachedFlag(1);
@@ -218,7 +221,7 @@ void Displacement::aproximateTo(geometry_msgs::PoseStamped *pose, bool isGoal, b
     }*/
 }
 /*
-  *   The idea is to start muving in the direction of the nextPoint relative to base_link frame
+  *   The idea is to start moving in the direction of the nextPoint relative to base_link frame
   *   But, to give some preference to X direction of muvement(forward) because of reasons(in ARCO for example we have blind areas in the laterals)
   *   So we will give velocity v=(vx,vy) in the direction of the next point, but at the same time the robot will rotate to face the point and thus
   *   the mouvement will finally be in x direction. 
@@ -233,20 +236,29 @@ void Displacement::moveHolon(double finalYaw){
     
     Vx = cos(angle2NextPoint) * v; // /(fabs(angle2NextPoint)/M_PI_2*3);
     Vy = sin(angle2NextPoint) * v; // /(fabs(angle2NextPoint)/M_PI_2*3);
-    ROS_WARN("Theta: %.2f\t Vx %.2f\tVy %.2f", angle2NextPoint,Vx, Vy);
+    ROS_WARN_THROTTLE(1,"Theta: %.2f\t Vx %.2f\tVy %.2f", angle2NextPoint/M_PI*180,Vx, Vy);
     /*if (dist2GlobalGoal < distMargin * 1.5)
     {
         Vx /= 2;
         Vy /= 2;
     }*/
     
-    Displacement::someoneInFront(Vx,Vy);
+    if(Displacement::someoneInFront(Vx,Vy)){
+        ROS_WARN_THROTTLE(1,"Yesss ");
+    }
     
     if (fabs(angle2NextPoint) > d2rad(angleMargin))
     {
         //Wz = angularMaxSpeed * angle2NextPoint / fabs(angle2NextPoint);
 
         Wz = Displacement::getVel(angularMaxSpeed, a, angle2NextPoint, 0);
+        if(fabs(angle2NextPoint) > M_PI_2){
+            Vx/=1.5;
+            Vy/=1.5;
+        }else if(fabs(angle2NextPoint) > M_PI_4){
+            Vx/=1.2;
+            Vy/=1.2;
+        }
         /*if (fabs(angle2NextPoint) < 2 * d2rad(angleMargin))
         {
             Wz = (angularMaxSpeed / 3) * angle2NextPoint / fabs(angle2NextPoint);
@@ -270,7 +282,7 @@ void Displacement::moveNonHolon()
     {
         Vx = Displacement::getVel(linearMaxSpeed,b,dist2GlobalGoal,0);
         Vy = 0;
-        Wz = Displacement::getVel(angularMaxSpeed/2,a,angle2NextPoint,0);
+        Wz = Displacement::getVel(angularMaxSpeed,a/2,angle2NextPoint,0);
         //Wz = 3 * angle2NextPoint;
     }
 }
@@ -278,19 +290,22 @@ void Displacement::moveNonHolon()
 void Displacement::navigate()
 {
     Displacement::refreshParams();
-    //if(possible_to_move.data){
-        //start == ros::Time::now();
-        if (trajReceived && !goalReached.data && do_navigate)
+    
+        
+        if (trajReceived && !goalReached.data && do_navigate && !localGoalOcc.data && possible_to_move.data)
         {
+            if(aproxComplete){
+                aproxComplete=false;
+            }
             Vx = 0;
             Vy = 0;
             Wz = 0;
 
-            PoseStamp nextPoseBlFrame = Displacement::transformPose(nextPoint, "map", "base_link");
+            PoseStamp nextPoseBlFrame = Displacement::transformPose(nextPoint, world_frame, robot_frame);
             angle2NextPoint = atan2(nextPoseBlFrame.pose.position.y, nextPoseBlFrame.pose.position.x);
             dist2NextPoint = Displacement::euclideanDistance(nextPoseBlFrame);
 
-            globalGoalPose = Displacement::transformPose(globalGoal, "map", "base_link");
+            globalGoalPose = Displacement::transformPose(globalGoal, world_frame, robot_frame);
             dist2GlobalGoal = Displacement::euclideanDistance(globalGoalPose);
             angle2GlobalGoal = Displacement::getYawFromQuat(globalGoalPose.pose.orientation);
 
@@ -307,18 +322,43 @@ void Displacement::navigate()
             Displacement::publishCmdVel();
 
         }
-    /*}else{
-        //Si no se puede mover, esperar 5s, si despues de 5s sigue sin poder, deberia moverse para intentar refrescar
-        //el mapa
-        ROS_INFO_THROTTLE(1,"No solution, so I wait the space to be clear");
-        Displacement::publishZeroVelocity();
-        if(start.toSec() - ros::Time::now().toSec() > 5){
-            //dosomehtin
-            Displacement::rotateToRefresh();
+        if(goalReached.data && !aproxComplete){
+            ROS_WARN("Ejecutando acercamiento para carga marcha atras");
+            if(!tr0_catch){
+                try
+                {
+                    tr0 = tfBuffer->lookupTransform("base_link","odom", ros::Time(0));
+                    tr0_catch = true;
+                }
+                catch (tf2::TransformException &ex)
+                {
+                    ROS_WARN("No transform %s", ex.what());
+                }
+                
+                vel.linear.y =  0;
+                vel.angular.z = 0;
+            }else{
+                try
+                {
+                    tr1 = tfBuffer->lookupTransform("base_link","odom", ros::Time(0));
+                    dlt.x = tr1.transform.translation.x - tr0.transform.translation.x;
+                    dlt.y = tr1.transform.translation.y - tr0.transform.translation.y;
+                    vel.linear.x = Displacement::getVel(0.2,2,1-sqrtf(dlt.x*dlt.x+dlt.y*dlt.y), 0);
+                    ROS_ERROR("Aprox vel: %.2f ; Dist: %.2f", vel.linear.x, sqrtf(dlt.x*dlt.x+dlt.y*dlt.y));
+                    if(sqrtf(dlt.x*dlt.x+dlt.y*dlt.y) < 1){
+                        twist_pub.publish(vel);
+                    }else{
+                    aproxComplete = true;
+                    tr0_catch = false;
+                    }
+                }
+                catch (tf2::TransformException &ex)
+                {
+                    ROS_WARN("No transform %s", ex.what());
+                }
+            }
         }
-
-
-    }*/
+   
 }
 void Displacement::rotateToRefresh(){
     
@@ -356,7 +396,7 @@ void Displacement::publishZeroVelocity()
 
     twist_pub.publish(vel);
     muving_state_pub.publish(muvingState);
-    goal_reached_pub.publish(goalReached);
+    //goal_reached_pub.publish(goalReached);
 }
 void Displacement::setGoalReachedFlag(bool status_)
 {
@@ -365,8 +405,9 @@ void Displacement::setGoalReachedFlag(bool status_)
     {
         goalReached.data = true;
         Displacement::publishZeroVelocity();
+        goal_reached_pub.publish(goalReached);
     }
-    goal_reached_pub.publish(goalReached);
+    
 }
 void Displacement::publishCmdVel()
 {
@@ -395,7 +436,6 @@ void Displacement::publishCmdVel()
 
 PoseStamp Displacement::transformPose(trajectory_msgs::MultiDOFJointTrajectoryPoint point, std::string from, std::string to)
 {
-
     PoseStamp pose;
     pose.header.frame_id = from;
     pose.header.seq = rand();
@@ -442,7 +482,7 @@ void Displacement::computeDistanceToPeople(){
     
     PoseStamp bl_pose, person;
 
-    bl_pose.header.frame_id = "base_link";
+    bl_pose.header.frame_id = robot_frame;
     bl_pose.header.seq = rand();
     bl_pose.header.stamp = ros::Time::now();
 
@@ -454,7 +494,7 @@ void Displacement::computeDistanceToPeople(){
     bl_pose.pose.orientation.z = 0;
 
 
-    bl_pose = transformPose(bl_pose,"base_link", "map");
+    bl_pose = transformPose(bl_pose,robot_frame, world_frame);
     //ROS_WARN("base_link pose: [%.2f, %.2f]", bl_pose.pose.position.x, bl_pose.pose.position.y);
     pair<string, pair<float,float>> p;
 
@@ -463,11 +503,14 @@ void Displacement::computeDistanceToPeople(){
     for(int i = 0; i < peopl.people.size(); i++){
         
         person.pose.position = peopl.people.at(i).position;
-        p.first = peopl.people.at(i).name;
-        p.second.first = euclideanDistance(bl_pose, person);
+        person = transformPose(person,world_frame,robot_frame);
 
+        p.first = peopl.people.at(i).name;
+        p.second.first = euclideanDistance(person);
         p.second.second = atan2(person.pose.position.y, person.pose.position.x)/M_PI*180;
-        
+        if(p.second.second < 0)
+            p.second.second+=360;
+
         dist2people.insert(p);
         //ROS_WARN_THROTTLE(1,"%s\t %.2f\t %.2f\n",p.first.c_str(), p.second.first,p.second.second);
     }
@@ -476,34 +519,59 @@ void Displacement::computeDistanceToPeople(){
 }
 void Displacement::printPeople(){
     
-    printf("\x1B[32m\n\tName  \t Distance\n");
-    for(auto it = dist2people.begin(); it != dist2people.end(); ++it){
-        printf("\x1B[32m\t  %s\t %.2f\n",it->first.c_str(), it->second.first);
+    ROS_INFO("\x1B[32m\n\tName  \t Distance \t Angle \n");
+    for(auto &it : dist2people){
+        ROS_INFO("\x1B[32m\t  %s\t %.2f\t %.2f\n",it.first.c_str(), it.second.first, it.second.second);
     }
-    printf("\x1B[0m");
+    ROS_INFO("\x1B[0m");
 }
 //To check if anyone in the people list is in the direction mouvement cone +-40º centered in the
 //velocity direction
 bool Displacement::someoneInFront(){
    return Displacement::someoneInFront(Vx,Vy);
 }
-bool Displacement::someoneInFront(int vx, int vy){
+bool Displacement::someoneInFront(float vx, float vy){
 
     if(Vx != 0 || Vy != 0){
+        
         float theta1 = atan2(vy,vx) /M_PI * 180;
+        float t2=theta1+alpha;
+        float t3=theta1-alpha;
 
-        for(auto it = dist2people.begin(); it!=dist2people.end(); ++it){
-            if(theta1 - alpha < -180){
-
+        if(theta1 < 0)
+            theta1+=360;
+        if(t2 > 360)
+            t2-=360;
+        if(t3 < 0)
+            t3+=360;
+        ROS_INFO_THROTTLE(1,"T2: %.2f \t T3: %.2f",t2,t3);
+    
+            //Case 1: theta 1 > alpha && theta < 360-alpha
+        if(theta1 > alpha && theta1 < ( 360 - alpha )){
+            for(auto &it: dist2people)
+                if(it.second.second < t2 && it.second.second > t3)
+                    return true;
+            
+        }
+        //Case 2: theta 1 < alpha 
+        if(theta1 < alpha){
+            for(auto &it: dist2people){
+                if(it.second.second < t2 && (fabs(t3-360) + it.second.second )< 2*alpha )
+                    return true;
             }
-            if(theta1 + alpha > 180){
-
+        }
+        //Case 3:  theta1 > 360-alpha
+        if(theta1 > ( 360 - alpha )){
+            for(auto &it: dist2people){
+                if(it.second.second > t3 && t2 + fabs(it.second.second-360) < 2*alpha  )
+                    return true;
             }
-            if(it->second.second > theta1-alpha && it->second.second < theta1+alpha ){
-                ROS_INFO("%s : %.2f m, %.2f grados",it->first.c_str(),it->second.first,it->second.second);
+    }
+            /*if(it->second.second < t2 && it->second.second > t3 ){
+                ROS_INFO_THROTTLE(1,"%s : %.2f m, %.2f grados",it->first.c_str(),it->second.first,it->second.second);
                 return true;
-            }    
-        }        
+            } */
+              
     }
     return false;
 }

@@ -100,6 +100,7 @@ public:
   void trajectoryCb(const trajectory_msgs::MultiDOFJointTrajectory::ConstPtr &trj);
   void globalGoalCb(const geometry_msgs::PoseStampedConstPtr &globGoal_);
   void impossibleMoveCb(const std_msgs::Bool::ConstPtr &msg);
+  void occLocalGoalCb(const std_msgs::Bool::ConstPtr &msg);
 private:
 
   /**
@@ -146,7 +147,7 @@ private:
   void computeDistanceToPeople();
 
   bool someoneInFront();
-  bool someoneInFront(int vx, int vy);
+  bool someoneInFront(float vx, float vy);
   /**
    * As its name says, it publishes the Vx,Vy and Wz
    * Also publishes to muving state topic as true if any of the velocity componentes are differents from zero
@@ -196,7 +197,7 @@ private:
 
 
   /**    Variables    **/
-
+  string world_frame, robot_frame;
   bool holonomic;//1 o 0(true or false)
   bool finalOrientationOk, homePublished, trajReceived;//Control flags
   bool do_navigate;
@@ -221,7 +222,7 @@ private:
 
   tf2_ros::Buffer *tfBuffer;//Pointer to the tfBuffer created in the node
 
-  std_msgs::Bool muvingState, goalReached; //Flags that will be published 
+  std_msgs::Bool muvingState, goalReached, localGoalOcc; //Flags that will be published 
   
   
   //std_msgs::UInt8MultiArray red, green, blue, white; //Not used right know, maybe will be used to signalize the status of the robot with the leds
@@ -243,7 +244,9 @@ private:
   ros::Duration d;
   float secs;
 
-
+  bool aproxComplete,tr0_catch;
+  geometry_msgs::TransformStamped tr0,tr1;
+  geometry_msgs::Vector3 dlt;
 };
 
 } /*  namespace Navigators  */

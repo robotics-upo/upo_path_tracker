@@ -32,7 +32,7 @@ int main(int argc, char **argv)
     SecurityMargin securityMargin(&n);
     Navigators::Displacement despl(&n, &securityMargin, &tfBuffer);
 
-    ros::Subscriber laser_sub = n.subscribe("/scanFront", 1, &SecurityMargin::laser1Callback, &securityMargin);
+    ros::Subscriber laser_sub = n.subscribe("/scanMulti", 1, &SecurityMargin::laser1Callback, &securityMargin);
     ros::Subscriber laser_sub2 = n.subscribe("/scanBackFiltered", 1, &SecurityMargin::laser2Callback, &securityMargin);
     ros::Subscriber path_sub = n.subscribe("/trajectory_tracker/local_input_trajectory", 1, &Navigators::Displacement::trajectoryCb, &despl);
     ros::Subscriber global_goal_sub = n.subscribe("/move_base_simple/goal", 1, &Navigators::Displacement::globalGoalCb, &despl);
@@ -40,6 +40,7 @@ int main(int argc, char **argv)
     ros::Subscriber goHome = n.subscribe("/trajectory_tracker/go_home", 1, goHomeCb);
     ros::Subscriber people = n.subscribe("/people", 1, &Navigators::Displacement::trackedPersonCb, &despl);
     ros::Subscriber imp = n.subscribe("/trajectory_tracker/impossible_to_find",1, &Navigators::Displacement::impossibleMoveCb, &despl);
+    ros::Subscriber local_goal_occ_sub = n.subscribe("/trajectory_tracker/local_goal_occupied", 1, &Navigators::Displacement::occLocalGoalCb, &despl);
 
 #ifdef DEBUG
     ros::Publisher plan_time = n.advertise<std_msgs::Int32>("/nav_loop_times", 1000);

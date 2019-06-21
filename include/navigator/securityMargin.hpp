@@ -23,6 +23,9 @@
 
 //Defines
 #define HOKUYO 721
+#define HOKUYONEW 1081
+#define STEPNEW 0.00436332309619
+
 
 using namespace std;
 
@@ -85,6 +88,12 @@ private:
   **/
   void buildArrays();
 
+  void buildArraysSquare2(vector<float> *array, RVizMarker *marker, bool ext);
+  /**
+   * 
+   * 
+  **/
+  void buildArraysSquare(vector<float> *array,RVizMarker *marker, bool ext, bool fr);
   /**
    * The main function that compares the arrays with the lasers messages data+
    * @param whickOne: 1 to check the outer margins and 0 for the inner margin
@@ -131,6 +140,13 @@ private:
   std_msgs::Bool stop_msg;
 
   vector<float> secArrayFr, secArrayExtFr, secArrayBack, secArrayExtBack;
+  double l1_angle_i, l2_angle_i;
+  double l1_lenght, l2_lenght;
+  double l1_angle_min, l2_angle_min;
+  //
+  float h1,h2,w,delta_d;
+
+  float margin_y,margin_x;
 };
 
 #endif
