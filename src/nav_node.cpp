@@ -42,9 +42,9 @@ int main(int argc, char **argv)
     {
 
         ros::spinOnce();
-        //securityMargin.canIMove();
+        securityMargin.canIMove();
 
-        //despl.navigate();
+        despl.navigate();
         loop_rate.sleep();
     }
 
