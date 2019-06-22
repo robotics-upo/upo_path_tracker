@@ -61,6 +61,8 @@ public:
   void laser2Callback(const sensor_msgs::LaserScanConstPtr &scan);
 
 private:
+  
+  void buildSelected();
   /**
    * This function build the four security margins arrays and also 
    * the marker of each one if pub markers is set to true
@@ -132,14 +134,13 @@ private:
   
   ros::NodeHandle *nh;
   ros::Publisher marker_fr_1_pub, marker_fr_2_pub, marker_rr_1_pub, marker_rr_2_pub, stop_pub;
-
+  ros::Subscriber laser1_sub, laser2_sub;
   sensor_msgs::LaserScanConstPtr laser1CPtr, laser2CPtr;
   std_msgs::Bool stop_msg;
   std_msgs::ColorRGBA red, green;
   RVizMarker markerIntFr, markerExtFr, markerIntBack, markerExtBack;
-  ros::Subscriber laser1_sub,laser2_sub;
-  string laser1_topic,laser2_topic;
   
+  string laser1_topic, laser2_topic;
 };
 
 #endif

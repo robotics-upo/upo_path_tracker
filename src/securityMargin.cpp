@@ -4,47 +4,62 @@
 SecurityMargin::SecurityMargin(ros::NodeHandle *n)
 {
     SecurityMargin::setParams(n);
+   
+}
+void SecurityMargin::buildSelected(){
 
+   
+    ROS_INFO("Security Mode: %d", secMode);
+    ROS_INFO("Front laser msg lenght: %d",frontLaserArrayMsgLen);
+    ROS_INFO("Back laser msg lenght: %d",backLaserArrayMsgLen);
     switch (secMode)
     {
     case 0:
+        ROS_INFO("Building in mode 0");
         SecurityMargin::buildArrays();
+        ROS_INFO("Finished");
         break;
     case 1:
+        ROS_INFO("Building in mode 1");
         SecurityMargin::buildArraysSquare2(&secArrayFr, &markerIntFr, 0);
         SecurityMargin::buildArraysSquare2(&secArrayExtFr, &markerExtFr, 1);
+        ROS_INFO("Finished");
         break;
     case 2:
+        ROS_INFO("Building in mode 2");
         SecurityMargin::buildElliptic();
+        ROS_INFO("Finished");
         break;
     default:
+        ROS_INFO("Wrong mode: %d", secMode);
         break;
     }
-
-    if (pubMarkers)
-        SecurityMargin::publishRvizMarkers();
+    
 }
- void SecurityMargin::laser1Callback(const sensor_msgs::LaserScanConstPtr &scan) //Front
-{
-
+void SecurityMargin::laser1Callback(const sensor_msgs::LaserScanConstPtr &scan) //Front
+{   
+    //ROS_INFO("Testing laser 1: %.2f", scan->ranges.at(40));
     if (!laser1Got)
     {
         laser1CPtr = scan;
         frontLaserArrayMsgLen = scan->ranges.size();
         laser1Got = true;
-        if (secMode = 0)
+        if (secMode == 0)
         {
             float laserSecurityAngleFront_;
-            nh->param("nav_node/security_margin/laser_security_angle_front", laserSecurityAngleFront_, (float)15);
+            nh->param("nav_node/laser_security_angle_front", laserSecurityAngleFront_, (float)15);
             laserSecurityAngleFront = ceil(laserSecurityAngleFront_ * (frontLaserArrayMsgLen / 180));
+            
         }
     }
-    if (laser2Got && !lasersGot)
+    if (laser2Got && !lasersGot){
         lasersGot = true;
+        SecurityMargin::buildSelected();
+    }
+    
 }
 void SecurityMargin::laser2Callback(const sensor_msgs::LaserScanConstPtr &scan) //Rear
 {
-
     if (!laser2Got)
     {
         laser2CPtr = scan;
@@ -53,24 +68,30 @@ void SecurityMargin::laser2Callback(const sensor_msgs::LaserScanConstPtr &scan) 
         if (secMode == 0)
         {
             float laserSecurityAngleBack_;
-            nh->param("nav_node/security_margin/laser_security_angle_back", laserSecurityAngleBack_, (float)15);
+            nh->param("nav_node/laser_security_angle_back", laserSecurityAngleBack_, (float)15);
             laserSecurityAngleBack = ceil(laserSecurityAngleBack_ * (backLaserArrayMsgLen / 180));
         }
     }
 
-    if (laser1Got && !lasersGot)
+    if (laser1Got && !lasersGot){
         lasersGot = true;
+        SecurityMargin::buildSelected();
+    }
+        
 }
 void SecurityMargin::refreshParams()
 {
     float laserSecurityAngleBack_, laserSecurityAngleFront_;
 
-    ros::param::get("nav_node/security_margin/f_front", f1);
-    ros::param::get("nav_node/security_margin/f_back", f2);
-    ros::param::get("nav_node/security_margin/inner_radius_front", innerSecDistFront);
-    ros::param::get("nav_node/security_margin/outer_radius_front", extSecDistFront);
-    ros::param::get("nav_node/security_margin/inner_radius_back", innerSecDistBack);
-    ros::param::get("nav_node/security_margin/outer_radius_back", extSecDistBack);
+    ros::param::get("nav_node/f_front", f1);
+    ros::param::get("nav_node/f_back", f2);
+    ros::param::get("nav_node/inner_radius_front", innerSecDistFront);
+    ros::param::get("nav_node/outer_radius_front", extSecDistFront);
+    ros::param::get("nav_node/inner_radius_back", innerSecDistBack);
+    ros::param::get("nav_node/outer_radius_back", extSecDistBack);
+    ros::param::get("nav_node/square_security_area/delta_d", delta_d);
+    ros::param::get("nav_node/square_security_area/margin_x", margin_x);
+    ros::param::get("nav_node/square_security_area/margin_y", margin_y);
 
     laserSecurityAngleFront = ceil(laserSecurityAngleFront_ * (frontLaserArrayMsgLen / 180));
     laserSecurityAngleBack = ceil(laserSecurityAngleBack_ * (backLaserArrayMsgLen / 180));
@@ -80,48 +101,78 @@ void SecurityMargin::setParams(ros::NodeHandle *n)
     nh = n;
     //Markers publishers
 
-    nh->param("nav_node/security_margin/security_mode", secMode, (int)1);
-    nh->param("nav_node/security_margin/publish_markers", pubMarkers, (bool)1);
-    nh->param("nav_node/security_margin/front_laser_link_frame_id", front_laser_link_frame, (string) "front_laser_link");
+    nh->param("nav_node/security_mode", secMode, (int)1);
+    nh->param("nav_node/publish_markers", pubMarkers, (bool)1);
+    nh->param("nav_node/front_laser_link_frame_id", front_laser_link_frame, (string) "front_laser_link");
     string stop_topic;
-    nh->param("nav_node/security_margin/security_stop_topic", stop_topic, (string) "/security_stop");
+    nh->param("nav_node/security_stop_topic", stop_topic, (string) "/security_stop");
     stop_pub = nh->advertise<std_msgs::Bool>(stop_topic, 0);
 
     switch (secMode)
     {
 
     case 0:
-        nh->param("nav_node/security_margin/f_front", f1, (float)1.6);
-        nh->param("nav_node/security_margin/f_back", f2, (float)1.6);
-        nh->param("nav_node/security_margin/inner_radius_front", innerSecDistFront, (float)0.6);
-        nh->param("nav_node/security_margin/outer_radius_front", extSecDistFront, (float)1);
-        nh->param("nav_node/security_margin/inner_radius_back", innerSecDistBack, (float)0.6);
-        nh->param("nav_node/security_margin/outer_radius_back", extSecDistBack, (float)1);
-        nh->param("nav_node/security_margin/only_front", onlyFront, (bool)0);
-        nh->param("nav_node/security_margin/back_laser_link_frame_id", back_laser_link_frame, (string) "back_laser_link");
-        nh->param("nav_node/security_margin/laser_front_topic", laser1_topic, (string)"/scanFront");
-        nh->param("nav_node/security_margin/laser_rear_topic", laser2_topic, (string)"/scanBack");
+        nh->param("nav_node/f_front", f1, (float)1.6);
+        nh->param("nav_node/inner_radius_front", innerSecDistFront, (float)0.6);
+        nh->param("nav_node/outer_radius_front", extSecDistFront, (float)1);
+        nh->param("nav_node/only_front", onlyFront, (bool)0);
+        nh->param("nav_node/front_laser_link_frame_id", front_laser_link_frame, (string) "front_laser_link");
+        nh->param("nav_node/laser_front_topic", laser1_topic, (string)"/scanFront");
+        ROS_INFO("Front f factor: %.2f", f1);
+        ROS_INFO("Only front: %d", onlyFront);
+        ROS_INFO("Inner radius front: %.2f", innerSecDistFront);
+        ROS_INFO("Outer radius front: %.2f", extSecDistFront);
+        ROS_INFO("Front laser link frame: %s", front_laser_link_frame.c_str());
+        if(!onlyFront){
+            nh->param("nav_node/back_laser_link_frame_id", back_laser_link_frame, (string) "back_laser_link");
+            nh->param("nav_node/inner_radius_back", innerSecDistBack, (float)0.6);
+            nh->param("nav_node/outer_radius_back", extSecDistBack, (float)1);
+            nh->param("nav_node/f_back", f2, (float)1.6);
+            nh->param("nav_node/laser_back_topic", laser2_topic, (string)"/scanBack");
+            ROS_INFO("Rear f factor: %.2f", f2);
+            ROS_INFO("Back laser link frame id: %s", back_laser_link_frame.c_str());
+            ROS_INFO("Inner radius back: %.2f", innerSecDistBack);
+            ROS_INFO("Outer radius back: %.2f", extSecDistBack);
+            laser2_sub = nh->subscribe<sensor_msgs::LaserScan> (laser2_topic.c_str(), 1, boost::bind(&SecurityMargin::laser2Callback,this, _1));
+            laser2Got=false;
+        }else{
+            laser2Got=true;
+            ROS_INFO("HEEE");
+        }
         break;
     case 1:
         onlyFront = true;
-        nh->param("nav_node/security_margin/robot_frame_id", base_link_frame, (string) "base_link");
-        nh->param("nav_node/security_margin/square_security_area/delta_d", delta_d, (float)0.15);
-        nh->param("nav_node/security_margin/square_security_area/margin_x", margin_x, (float)0.5);
-        nh->param("nav_node/security_margin/square_security_area/margin_y", margin_y, (float)0.5);
-        nh->param("nav_node/security_margin/full_laser_topic", laser1_topic, (string)"/scanMulti");
+        laser2Got=true;
+        nh->param("nav_node/robot_base_frame", base_link_frame, (string) "base_link");
+        nh->param("nav_node/delta_d", delta_d, (float)0.15);
+        nh->param("nav_node/margin_x", margin_x, (float)0.5);
+        nh->param("nav_node/margin_y", margin_y, (float)0.5);
+        nh->param("nav_node/full_laser_topic", laser1_topic, (string)"/scanMulti");
+        ROS_INFO("Robot base frame: %s", base_link_frame.c_str());
+        ROS_INFO("Delta d: %.2f",delta_d);
+        ROS_INFO("Margin x: %.2f", margin_x);
+        ROS_INFO("Margin y: %.2f", margin_y);
         break;
     case 2:
         onlyFront = true;
-        nh->param("nav_node/security_margin/f", f1, (float)1.6);
-        nh->param("nav_node/security_margin/inner_radius", innerSecDistFront, (float)0.6);
-        nh->param("nav_node/security_margin/outer_radius", extSecDistFront, (float)1);
-        nh->param("nav_node/security_margin/full_laser_topic", laser1_topic, (string)"/scanMulti");
+        laser2Got=true;
+        nh->param("nav_node/robot_base_frame", base_link_frame, (string) "base_link");
+        nh->param("nav_node/f", f1, (float)1.6);
+        nh->param("nav_node/inner_radius", innerSecDistFront, (float)0.6);
+        nh->param("nav_node/outer_radius", extSecDistFront, (float)1);
+        nh->param("nav_node/full_laser_topic", laser1_topic, (string)"/scanMulti");
+        ROS_INFO("Robot base frame: %s", base_link_frame.c_str());
+        ROS_INFO("F factor: %.2f", f1);
+        ROS_INFO("Inner radius: %.2f", innerSecDistFront);
+        ROS_INFO("Outer radius: %.2f ", extSecDistFront);
         break;
     default:
         ROS_ERROR("Security Margin: Wrong mode, %d doesn't exist", secMode);
         break;
     }
-    
+    laser1_sub = nh->subscribe<sensor_msgs::LaserScan> (laser1_topic.c_str(), 1, boost::bind(&SecurityMargin::laser1Callback,this, _1));
+
+
     //Control flags
     isInsideDangerousArea1 = false;
     securityAreaOccup1 = false;
@@ -135,7 +186,6 @@ void SecurityMargin::setParams(ros::NodeHandle *n)
     red2 = false;
 
     laser1Got = false;
-    laser2Got = false;
     lasersGot = false;
 
     red.a = 1;
@@ -244,7 +294,7 @@ ________________|   y2
 */
 void SecurityMargin::buildArraysSquare2(vector<float> *array, RVizMarker *marker, bool ext)
 {
-    pair<float, float> p1, p2, p3;
+    pair<float, float> p1, p2;
     vector<float> a1, a2;
 
     p1.first = ext ? margin_x + delta_d : margin_x;
@@ -253,15 +303,12 @@ void SecurityMargin::buildArraysSquare2(vector<float> *array, RVizMarker *marker
     p2.first = ext ? margin_x + delta_d : margin_x;
     p2.second = ext ? margin_y + delta_d : margin_y;
 
-    p3.first = 0;
-    p3.second = ext ? margin_y + delta_d : margin_y;
-
     float L1, L2, L;
     float incr1, incr2;
     int n1, n2;
 
     L1 = p1.first;
-    L2 = p3.second;
+    L2 = ext ? margin_y + delta_d : margin_y;
     L = 4 * L1 + 4 * L2;
 
     n1 = floor(frontLaserArrayMsgLen * L1 / L);
@@ -272,52 +319,38 @@ void SecurityMargin::buildArraysSquare2(vector<float> *array, RVizMarker *marker
 
     //Sec de push_back: L1,L2,L2,L1,L1,L2,L2,L1
     for (int i = 0; i < n1; i++)
-    {
         a1.push_back(sqrtf(p1.first * p1.first + i * incr1 * i * incr1));
-    }
+
     for (int i = 0; i < n2; i++)
-    {
         a2.push_back(sqrtf(p2.second * p2.second + (p2.first - i * incr2) * (p2.first - i * incr2)));
-    }
 
     for (int i = 0; i < n1; i++)
-    {
         array->push_back(a1.at(i));
-        //ROS_WARN("%.2f", a1.at(i));
-    }
-    for (int i = 0; i < n2; i++)
-    {
-        array->push_back(a2.at(i));
-    }
-    for (int i = n2; i > 0; i--)
-    {
-        array->push_back(a2.at(i - 1));
-    }
-    for (int i = n1; i > 0; i--)
-    {
-        array->push_back(a1.at(i - 1));
-    }
-    for (int i = 0; i < n1; i++)
-    {
-        array->push_back(a1.at(i));
-    }
 
     for (int i = 0; i < n2; i++)
-    {
         array->push_back(a2.at(i));
-    }
+
     for (int i = n2; i > 0; i--)
-    {
         array->push_back(a2.at(i - 1));
-    }
+
     for (int i = n1; i > 0; i--)
-    {
         array->push_back(a1.at(i - 1));
-    }
+
+    for (int i = 0; i < n1; i++)
+        array->push_back(a1.at(i));
+
+    for (int i = 0; i < n2; i++)
+        array->push_back(a2.at(i));
+
+    for (int i = n2; i > 0; i--)
+        array->push_back(a2.at(i - 1));
+
+    for (int i = n1; i > 0; i--)
+        array->push_back(a1.at(i - 1));
+
     while (array->size() < frontLaserArrayMsgLen)
-    {
         array->push_back(0);
-    }
+
     marker->points.clear();
     geometry_msgs::Point p;
     p.x = p2.first;
@@ -346,8 +379,8 @@ void SecurityMargin::buildElliptic()
     }
     for (double i = 0; i < frontLaserArrayMsgLen; i++)
     {
-        p.x = innerSecDistFront * cos(i / ((double)frontLaserArrayMsgLen) * 2 * M_PI);
-        p.y = f1 * innerSecDistFront * sin(i / ((double)frontLaserArrayMsgLen) * 2 * M_PI);
+        p.x = f1*innerSecDistFront * cos(i / ((double)frontLaserArrayMsgLen) * 2 * M_PI);
+        p.y = innerSecDistFront * sin(i / ((double)frontLaserArrayMsgLen) * 2 * M_PI);
         secArrayFr.push_back(sqrtf(p.x * p.x + p.y * p.y));
 
         if ((pubMarkers &&
@@ -364,6 +397,7 @@ void SecurityMargin::buildElliptic()
             i == laserSecurityAngleFront || i == frontLaserArrayMsgLen - laserSecurityAngleFront)
             markerExtFr.points.push_back(p);
     }
+   
 }
 //Mode 3: Old one used for ARCO laundry robot
 void SecurityMargin::buildArrays()
