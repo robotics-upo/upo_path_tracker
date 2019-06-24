@@ -383,18 +383,14 @@ void SecurityMargin::buildElliptic()
         p.y = innerSecDistFront * sin(i / ((double)frontLaserArrayMsgLen) * 2 * M_PI);
         secArrayFr.push_back(sqrtf(p.x * p.x + p.y * p.y));
 
-        if ((pubMarkers &&
-             ((int)i % 50) == 0 && i >= laserSecurityAngleFront && i <= frontLaserArrayMsgLen - laserSecurityAngleFront) ||
-            i == laserSecurityAngleFront || i == frontLaserArrayMsgLen - laserSecurityAngleFront)
+        if (pubMarkers &&  ((int)i % 50) == 0 )
             markerIntFr.points.push_back(p);
 
         p.x *= extSecDistFront / innerSecDistFront;
         p.y *= extSecDistFront / innerSecDistFront;
 
         secArrayExtFr.push_back(sqrtf(p.x * p.x + p.y * p.y));
-        if ((pubMarkers &&
-             ((int)i % 50) == 0 && i >= laserSecurityAngleFront && i <= frontLaserArrayMsgLen - laserSecurityAngleFront) ||
-            i == laserSecurityAngleFront || i == frontLaserArrayMsgLen - laserSecurityAngleFront)
+        if (pubMarkers &&  ((int)i % 50) == 0)
             markerExtFr.points.push_back(p);
     }
    
