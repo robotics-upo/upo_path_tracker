@@ -22,7 +22,8 @@ int main(int argc, char **argv)
     SecurityMargin securityMargin(&n);
 
     Navigators::SFMNav sfmcontroller(&n, &securityMargin, &tfBuffer);
-    //Displacement class subscribers
+
+    //SFM class subscribers
     ros::Subscriber path_sub = n.subscribe("/trajectory_tracker/local_input_trajectory", 1, &Navigators::SFMNav::trajectoryCb, &sfmcontroller);
     ros::Subscriber global_goal_sub = n.subscribe("/move_base_simple/goal", 1, &Navigators::SFMNav::globalGoalCb, &sfmcontroller);
     ros::Subscriber people = n.subscribe("/people_detections", 1, &Navigators::SFMNav::trackedPersonCb, &sfmcontroller);
