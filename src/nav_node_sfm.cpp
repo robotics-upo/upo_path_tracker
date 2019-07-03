@@ -51,7 +51,7 @@ int main(int argc, char **argv)
         ros::spinOnce();
         securityMargin.canIMove();
 
-        sfmcontroller.navigate();
+        sfmcontroller.navigate(loop_rate.cycleTime().toSec());
         loop_rate.sleep();
     }
 

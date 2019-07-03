@@ -32,7 +32,6 @@
 
 
 #include <lightsfm/sfm.hpp>
-#include <lightsfm/cmd_vel.hpp>
 
 using namespace std;
 
@@ -69,7 +68,7 @@ public:
    * to the holonomic/no-holonomic navigastion functions
    * @param isHome: To use when goHomeLab works
   **/
-  void navigate();
+  void navigate(double dt);
   
   /**
    * Return the value of goalReached flag
@@ -264,14 +263,8 @@ private:
 	double target_velocity;
 	double people_velocity;
 	double robot_velocity;
-
-	double robot_max_lin_acc;
-	double robot_max_ang_acc;
-	double beta_v;
-	double beta_y;
-	double beta_d;
 	
-	sfm::CmdVelProvider *cmdVelProviderPtr;
+	
 
 		ros::Publisher robot_markers_pub;
 
