@@ -331,7 +331,7 @@ void SFMNav::aproximateTo(geometry_msgs::PoseStamped *pose, bool isGoal, bool is
 
 void SFMNav::navigate(double dt)
 {
-    //SFMNav::refreshParams();
+    SFMNav::refreshParams();
 
     if (trajReceived && !goalReached.data && do_navigate && !localGoalOcc.data && possible_to_move.data)
     {
@@ -392,7 +392,9 @@ void SFMNav::navigate(double dt)
 		//vector with the X direction in base_link in the next two seconds
 		Vx = localV.x;
     		Vy = localV.y;
-    		Wz = std::atan2(localV.y,localV.x)/2.0;
+    		//Wz = std::atan2(localV.y,localV.x)/2.0;
+		double angle = std::atan2(localV.y,localV.x);
+		Wz = SFMNav::getVel(angularMaxSpeed, a, angle);
 
 		ROS_INFO("Vx: %f; Vy: %f, Wz: %f",Vx, Vy, Wz);
 
@@ -401,7 +403,7 @@ void SFMNav::navigate(double dt)
 			
 		
        }
-       // SFMNav::publishCmdVel();
+       SFMNav::publishCmdVel();
     }
     if (goalReached.data && !aproxComplete)
     {
