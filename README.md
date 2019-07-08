@@ -58,3 +58,27 @@ Depending on the mode you want to use, you need to pass it differents paramters.
 - f:
 - inner_radius:
 - outer_radius
+
+
+##SFMNav Class
+
+Local path tracker using a Social Force Model to adapt to people present in the environment.
+
+It is a substitute to the Displacement class.
+
+###Dependencies
+
+
+You should previously install the lightsfm library in your system:
+
+- Clone https://github.com/robotics-upo/lightsfm
+- run make install there (the library is a set of .hpp files that will be used by the SFMNav node)
+
+
+###Topics
+
+Besides the topics published by Displacement, it adds a topic with markers for the social forces at:
+
+/sfm/markers/robot_forces
+
+
