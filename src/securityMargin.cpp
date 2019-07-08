@@ -1,17 +1,16 @@
 
 #include <navigator/securityMargin.hpp>
 
-SecurityMargin::SecurityMargin(ros::NodeHandle *n)
+SecurityMargin::SecurityMargin(ros::NodeHandle *n, tf2_ros::Buffer *tfBuffer_)
 {
+    tfBuffer = tfBuffer_;
     SecurityMargin::setParams(n);
    
 }
 void SecurityMargin::buildSelected(){
 
+    
    
-    ROS_INFO("Security Mode: %d", secMode);
-    ROS_INFO("Front laser msg lenght: %d",frontLaserArrayMsgLen);
-    ROS_INFO("Back laser msg lenght: %d",backLaserArrayMsgLen);
     switch (secMode)
     {
     case 0:
@@ -21,8 +20,8 @@ void SecurityMargin::buildSelected(){
         break;
     case 1:
         ROS_INFO("Building in mode 1");
-        SecurityMargin::buildArraysSquare2(&secArrayFr, &markerIntFr, 0);
-        SecurityMargin::buildArraysSquare2(&secArrayExtFr, &markerExtFr, 1);
+        SecurityMargin::buildArraysSquare2(0);
+        SecurityMargin::buildArraysSquare2(1);
         ROS_INFO("Finished");
         break;
     case 2:
@@ -39,9 +38,10 @@ void SecurityMargin::buildSelected(){
 void SecurityMargin::laser1Callback(const sensor_msgs::LaserScanConstPtr &scan) //Front
 {   
     //ROS_INFO("Testing laser 1: %.2f", scan->ranges.at(40));
+    laser1CPtr = scan;
     if (!laser1Got)
     {
-        laser1CPtr = scan;
+        
         frontLaserArrayMsgLen = scan->ranges.size();
         laser1Got = true;
         if (secMode == 0)
@@ -60,9 +60,10 @@ void SecurityMargin::laser1Callback(const sensor_msgs::LaserScanConstPtr &scan) 
 }
 void SecurityMargin::laser2Callback(const sensor_msgs::LaserScanConstPtr &scan) //Rear
 {
+    laser2CPtr = scan;
     if (!laser2Got)
     {
-        laser2CPtr = scan;
+        
         backLaserArrayMsgLen = scan->ranges.size();
         laser2Got = true;
         if (secMode == 0)
@@ -79,22 +80,37 @@ void SecurityMargin::laser2Callback(const sensor_msgs::LaserScanConstPtr &scan) 
     }
         
 }
+void SecurityMargin::aproachManCb(const std_msgs::Bool::ConstPtr &msg){
+    aproaching_status=*msg;
+}
+void SecurityMargin::goalReachedCb(const std_msgs::Bool::ConstPtr &msg){
+    goal_reached = *msg;
+}
 void SecurityMargin::refreshParams()
 {
     float laserSecurityAngleBack_, laserSecurityAngleFront_;
-
+    if(secMode == 0){
     ros::param::get("nav_node/f_front", f1);
-    ros::param::get("nav_node/f_back", f2);
-    ros::param::get("nav_node/inner_radius_front", innerSecDistFront);
-    ros::param::get("nav_node/outer_radius_front", extSecDistFront);
-    ros::param::get("nav_node/inner_radius_back", innerSecDistBack);
-    ros::param::get("nav_node/outer_radius_back", extSecDistBack);
-    ros::param::get("nav_node/square_security_area/delta_d", delta_d);
-    ros::param::get("nav_node/square_security_area/margin_x", margin_x);
-    ros::param::get("nav_node/square_security_area/margin_y", margin_y);
+    }else{
+        ros::param::get("nav_node/f", f1);
+    }
 
+    ros::param::get("nav_node/f_back", f2);
+    //ros::param::get("nav_node/inner_radius_front", innerSecDistFront);
+    //ros::param::get("nav_node/outer_radius_front", extSecDistFront);
+    //ros::param::get("nav_node/inner_radius_back", innerSecDistBack);
+    //ros::param::get("nav_node/outer_radius_back", extSecDistBack);
+    ros::param::get("nav_node/delta_d", delta_d);
+    ros::param::get("nav_node/margin_x", margin_x);
+    ros::param::get("nav_node/margin_y", margin_y);
+    ros::param::get("nav_node/count1", count1);
+    ros::param::get("nav_node/count2", count2);
+    
     laserSecurityAngleFront = ceil(laserSecurityAngleFront_ * (frontLaserArrayMsgLen / 180));
     laserSecurityAngleBack = ceil(laserSecurityAngleBack_ * (backLaserArrayMsgLen / 180));
+}
+void SecurityMargin::dist2GoalCb(const std_msgs::Float32::ConstPtr &msg){
+    dist2goal=*msg;
 }
 void SecurityMargin::setParams(ros::NodeHandle *n)
 {
@@ -107,37 +123,46 @@ void SecurityMargin::setParams(ros::NodeHandle *n)
     string stop_topic;
     nh->param("nav_node/security_stop_topic", stop_topic, (string) "/security_stop");
     stop_pub = nh->advertise<std_msgs::Bool>(stop_topic, 0);
+    nh->param("nav_node/count1", count1, (int)25);
+    nh->param("nav_node/count2", count2, (int)200);
+    aproach_man_sub = nh->subscribe<std_msgs::Bool>("/trajectory_tracker/aproach_manoeuvre",1,boost::bind(&SecurityMargin::aproachManCb,this,_1));
+    dist2goal_sub = nh->subscribe<std_msgs::Float32>("/dist2goal",1,boost::bind(&SecurityMargin::dist2GoalCb,this,_1));
+
+    goal_reached_sub = nh->subscribe<std_msgs::Bool>("/trajectory_tracker/local_goal_reached",1,boost::bind(&SecurityMargin::goalReachedCb,this,_1));
+    //ROS_INFO("Security Mode: %d", secMode);
+    //ROS_INFO("Front laser msg lenght: %d",frontLaserArrayMsgLen);
+    //ROS_INFO("Back laser msg lenght: %d",backLaserArrayMsgLen);
 
     switch (secMode)
     {
 
     case 0:
-        nh->param("nav_node/f_front", f1, (float)1.6);
+        nh->param("nav_node/f_front", f1, (float)1);
         nh->param("nav_node/inner_radius_front", innerSecDistFront, (float)0.6);
         nh->param("nav_node/outer_radius_front", extSecDistFront, (float)1);
         nh->param("nav_node/only_front", onlyFront, (bool)0);
         nh->param("nav_node/front_laser_link_frame_id", front_laser_link_frame, (string) "front_laser_link");
         nh->param("nav_node/laser_front_topic", laser1_topic, (string)"/scanFront");
-        ROS_INFO("Front f factor: %.2f", f1);
-        ROS_INFO("Only front: %d", onlyFront);
-        ROS_INFO("Inner radius front: %.2f", innerSecDistFront);
-        ROS_INFO("Outer radius front: %.2f", extSecDistFront);
-        ROS_INFO("Front laser link frame: %s", front_laser_link_frame.c_str());
+        //ROS_INFO("Front f factor: %.2f", f1);
+        //ROS_INFO("Only front: %d", onlyFront);
+        //ROS_INFO("Inner radius front: %.2f", innerSecDistFront);
+        //ROS_INFO("Outer radius front: %.2f", extSecDistFront);
+        //ROS_INFO("Front laser link frame: %s", front_laser_link_frame.c_str());
         if(!onlyFront){
             nh->param("nav_node/back_laser_link_frame_id", back_laser_link_frame, (string) "back_laser_link");
             nh->param("nav_node/inner_radius_back", innerSecDistBack, (float)0.6);
             nh->param("nav_node/outer_radius_back", extSecDistBack, (float)1);
             nh->param("nav_node/f_back", f2, (float)1.6);
             nh->param("nav_node/laser_back_topic", laser2_topic, (string)"/scanBack");
-            ROS_INFO("Rear f factor: %.2f", f2);
-            ROS_INFO("Back laser link frame id: %s", back_laser_link_frame.c_str());
-            ROS_INFO("Inner radius back: %.2f", innerSecDistBack);
-            ROS_INFO("Outer radius back: %.2f", extSecDistBack);
+            //ROS_INFO("Rear f factor: %.2f", f2);
+            //ROS_INFO("Back laser link frame id: %s", back_laser_link_frame.c_str());
+            //ROS_INFO("Inner radius back: %.2f", innerSecDistBack);
+            //ROS_INFO("Outer radius back: %.2f", extSecDistBack);
             laser2_sub = nh->subscribe<sensor_msgs::LaserScan> (laser2_topic.c_str(), 1, boost::bind(&SecurityMargin::laser2Callback,this, _1));
             laser2Got=false;
         }else{
             laser2Got=true;
-            ROS_INFO("HEEE");
+            //ROS_INFO("HEEE");
         }
         break;
     case 1:
@@ -157,9 +182,9 @@ void SecurityMargin::setParams(ros::NodeHandle *n)
         onlyFront = true;
         laser2Got=true;
         nh->param("nav_node/robot_base_frame", base_link_frame, (string) "base_link");
-        nh->param("nav_node/f", f1, (float)1.6);
-        nh->param("nav_node/inner_radius", innerSecDistFront, (float)0.6);
-        nh->param("nav_node/outer_radius", extSecDistFront, (float)1);
+        nh->param("nav_node/f", f1, (float)1);
+        nh->param("nav_node/inner_radius", innerSecDistFront, (float)0.3);
+        nh->param("nav_node/outer_radius", extSecDistFront, (float)0.45);
         nh->param("nav_node/full_laser_topic", laser1_topic, (string)"/scanMulti");
         ROS_INFO("Robot base frame: %s", base_link_frame.c_str());
         ROS_INFO("F factor: %.2f", f1);
@@ -171,7 +196,7 @@ void SecurityMargin::setParams(ros::NodeHandle *n)
         break;
     }
     laser1_sub = nh->subscribe<sensor_msgs::LaserScan> (laser1_topic.c_str(), 1, boost::bind(&SecurityMargin::laser1Callback,this, _1));
-
+    
 
     //Control flags
     isInsideDangerousArea1 = false;
@@ -188,6 +213,11 @@ void SecurityMargin::setParams(ros::NodeHandle *n)
     laser1Got = false;
     lasersGot = false;
 
+    aproximating = false;
+    tr0_catch = false;
+
+    goingAway = false;
+    goal_reached.data = false;
     red.a = 1;
     red.b = 0;
     red.g = 0;
@@ -197,7 +227,8 @@ void SecurityMargin::setParams(ros::NodeHandle *n)
     green.g = 1;
     green.b = 0;
     green.r = 0;
-
+    cnt=0;
+    cnt2=0;
     if (pubMarkers)
     {
         marker_fr_1_pub = nh->advertise<visualization_msgs::Marker>("/securityDistMarkersFr1", 0);
@@ -292,79 +323,230 @@ ________________|   y2
    
 
 */
-void SecurityMargin::buildArraysSquare2(vector<float> *array, RVizMarker *marker, bool ext)
+void SecurityMargin::buildArraysSquare2( bool ext)
 {
-    pair<float, float> p1, p2;
-    vector<float> a1, a2;
+   if(!ext){
+
+    a1.clear();
+    a2.clear();
+    secArrayFr.clear();
 
     p1.first = ext ? margin_x + delta_d : margin_x;
     p1.second = 0;
-
+    
     p2.first = ext ? margin_x + delta_d : margin_x;
     p2.second = ext ? margin_y + delta_d : margin_y;
-
-    float L1, L2, L;
-    float incr1, incr2;
-    int n1, n2;
+    
 
     L1 = p1.first;
+    //ROS_INFO("l1: %f",L1);
     L2 = ext ? margin_y + delta_d : margin_y;
+    //ROS_INFO("l2: %f",L2);
     L = 4 * L1 + 4 * L2;
-
+    //ROS_INFO("L: %f",L);
     n1 = floor(frontLaserArrayMsgLen * L1 / L);
     n2 = floor(frontLaserArrayMsgLen * L2 / L);
     //ROS_WARN("N1: %d \t N2: %d",n1,n2);
     incr1 = L1 / n1;
     incr2 = L2 / n2;
-
+    //ROS_INFO("P 1: [%.2f, %.2f]", p1.first,p1.second);
+    //ROS_INFO("P 2: [%.2f, %.2f]", p2.first,p2.second);
+    //ROS_INFO("n1: %d, n2: %d, L1 %f, L2 %f, L %f, incr1 %f, incr2 %f, msg len: %d  ", n1, n2, L1,L2,L,incr1,incr2, frontLaserArrayMsgLen);
+    
     //Sec de push_back: L1,L2,L2,L1,L1,L2,L2,L1
-    for (int i = 0; i < n1; i++)
-        a1.push_back(sqrtf(p1.first * p1.first + i * incr1 * i * incr1));
+    float value;
+    for (int i = 0; i < n1; i++){
+        value = sqrtf(p1.first * p1.first + i * incr1 * i * incr1);
+        a1.push_back(value);
+        //ROS_INFO("%.2f",value);
+    }
+    for (int i = 0; i < n2; i++){
+        value=sqrtf(p2.second * p2.second + (p2.first - i * incr2) * (p2.first - i * incr2));
+        a2.push_back(value);
+         //ROS_INFO("%.2f",value);
+    }
+    for (int i = 0; i < n1; i++){
+        value = a1.at(i);
+        secArrayFr.push_back(value);
+    }
 
-    for (int i = 0; i < n2; i++)
-        a2.push_back(sqrtf(p2.second * p2.second + (p2.first - i * incr2) * (p2.first - i * incr2)));
-
-    for (int i = 0; i < n1; i++)
-        array->push_back(a1.at(i));
-
-    for (int i = 0; i < n2; i++)
-        array->push_back(a2.at(i));
-
-    for (int i = n2; i > 0; i--)
-        array->push_back(a2.at(i - 1));
-
-    for (int i = n1; i > 0; i--)
-        array->push_back(a1.at(i - 1));
-
-    for (int i = 0; i < n1; i++)
-        array->push_back(a1.at(i));
-
-    for (int i = 0; i < n2; i++)
-        array->push_back(a2.at(i));
-
-    for (int i = n2; i > 0; i--)
-        array->push_back(a2.at(i - 1));
-
-    for (int i = n1; i > 0; i--)
-        array->push_back(a1.at(i - 1));
-
-    while (array->size() < frontLaserArrayMsgLen)
-        array->push_back(0);
-
-    marker->points.clear();
+    for (int i = 0; i < n2; i++){
+        value = a2.at(i);
+        //ROS_INFO("VALUE: %f",value);
+        secArrayFr.push_back(value);
+    }
+    for (int i = n2; i > 0; i--){
+        value = a2.at(i-1);
+        //ROS_INFO("VALUE: %f",value);
+        secArrayFr.push_back(value);
+    }
+    for (int i = n1; i > 0; i--){
+        value = a1.at(i-1);
+        //ROS_INFO("VALUE: %f",value);
+        secArrayFr.push_back(value);
+    }
+    for (int i = 0; i < n1; i++){
+        value = a1.at(i);
+        //ROS_INFO("VALUE: %f",value);
+        secArrayFr.push_back(value);
+    }
+    for (int i = 0; i < n2; i++){
+        value = a2.at(i);
+        //ROS_INFO("VALUE: %f",value);
+        secArrayFr.push_back(value);
+        
+    }
+    for (int i = n2; i > 0; i--){
+        value = a2.at(i-1);
+        //ROS_INFO("VALUE: %f",value);
+        secArrayFr.push_back(value);
+    }
+    for (int i = n1; i > 0; i--){
+        value = a1.at(i-1);
+        //ROS_INFO("VALUE: %f",value);
+        secArrayFr.push_back(value);
+    }
+    //ROS_INFO("Array size: %d", secArrayFr.size());
+    int arrsize = secArrayFr.size();
+    while (arrsize < frontLaserArrayMsgLen){
+        
+        secArrayFr.push_back(0);
+        arrsize++;
+        //ROS_INFO("pum");
+    }
+    markerExtFr.points.clear();
     geometry_msgs::Point p;
     p.x = p2.first;
     p.y = p2.second;
+    p.z = 0.2;  
+    markerExtFr.points.push_back(p);
+    p.y *= -1;
+    markerExtFr.points.push_back(p);
+    p.x *= -1;
+    markerExtFr.points.push_back(p);
+    p.y *= -1;
+    markerExtFr.points.push_back(p);
+    p.x *= -1;
+    markerExtFr.points.push_back(p);
+    for(int i =  0; i < frontLaserArrayMsgLen; i++){
+        
+        //if(secArrayFr.at(i) != 0){
+        //    ROS_WARN("%d",i);
+        //    ROS_INFO("%.2f",secArrayFr.at(i));  
+        //}
+    }
+   }else{
 
-    marker->points.push_back(p);
+    a1.clear();
+    a2.clear();
+    secArrayExtFr.clear();
+
+    p1.first = ext ? margin_x + delta_d : margin_x;
+    p1.second = 0;
+    
+    p2.first = ext ? margin_x + delta_d : margin_x;
+    p2.second = ext ? margin_y + delta_d : margin_y;
+    
+
+    L1 = p1.first;
+    //ROS_INFO("l1: %f",L1);
+    L2 = ext ? margin_y + delta_d : margin_y;
+    //ROS_INFO("l2: %f",L2);
+    L = 4 * L1 + 4 * L2;
+    //ROS_INFO("L: %f",L);
+    n1 = floor(frontLaserArrayMsgLen * L1 / L);
+    n2 = floor(frontLaserArrayMsgLen * L2 / L);
+    //ROS_WARN("N1: %d \t N2: %d",n1,n2);
+    incr1 = L1 / n1;
+    incr2 = L2 / n2;
+    //ROS_INFO("P 1: [%.2f, %.2f]", p1.first,p1.second);
+    //ROS_INFO("P 2: [%.2f, %.2f]", p2.first,p2.second);
+    //ROS_INFO("n1: %d, n2: %d, L1 %f, L2 %f, L %f, incr1 %f, incr2 %f, msg len: %d  ", n1, n2, L1,L2,L,incr1,incr2, frontLaserArrayMsgLen);
+    
+    //Sec de push_back: L1,L2,L2,L1,L1,L2,L2,L1
+    float value;
+    for (int i = 0; i < n1; i++){
+        value = sqrtf(p1.first * p1.first + i * incr1 * i * incr1);
+        a1.push_back(value);
+        //ROS_INFO("%.2f",value);
+    }
+    for (int i = 0; i < n2; i++){
+        value=sqrtf(p2.second * p2.second + (p2.first - i * incr2) * (p2.first - i * incr2));
+        a2.push_back(value);
+         //ROS_INFO("%.2f",value);
+    }
+    for (int i = 0; i < n1; i++){
+        value = a1.at(i);
+        secArrayExtFr.push_back(value);
+    }
+
+    for (int i = 0; i < n2; i++){
+        value = a2.at(i);
+        //ROS_INFO("VALUE: %f",value);
+        secArrayExtFr.push_back(value);
+    }
+    for (int i = n2; i > 0; i--){
+        value = a2.at(i-1);
+        //ROS_INFO("VALUE: %f",value);
+        secArrayExtFr.push_back(value);
+    }
+    for (int i = n1; i > 0; i--){
+        value = a1.at(i-1);
+        //ROS_INFO("VALUE: %f",value);
+        secArrayExtFr.push_back(value);
+    }
+    for (int i = 0; i < n1; i++){
+        value = a1.at(i);
+        //ROS_INFO("VALUE: %f",value);
+        secArrayExtFr.push_back(value);
+    }
+    for (int i = 0; i < n2; i++){
+        value = a2.at(i);
+        //ROS_INFO("VALUE: %f",value);
+        secArrayExtFr.push_back(value);
+        
+    }
+    for (int i = n2; i > 0; i--){
+        value = a2.at(i-1);
+        //ROS_INFO("VALUE: %f",value);
+        secArrayExtFr.push_back(value);
+    }
+    for (int i = n1; i > 0; i--){
+        value = a1.at(i-1);
+        //ROS_INFO("VALUE: %f",value);
+        secArrayExtFr.push_back(value);
+    }
+    //ROS_INFO("Array size: %d", secArrayExtFr.size());
+    int arrsize = secArrayExtFr.size();
+    while (arrsize < frontLaserArrayMsgLen){
+        
+        secArrayExtFr.push_back(0);
+        arrsize++;
+        //ROS_INFO("pum");
+    }
+    markerIntFr.points.clear();
+    geometry_msgs::Point p;
+    p.x = p2.first;
+    p.y = p2.second;
+    p.z = 0.2;
+    markerIntFr.points.push_back(p);
     p.y *= -1;
-    marker->points.push_back(p);
+    markerIntFr.points.push_back(p);
     p.x *= -1;
-    marker->points.push_back(p);
+    markerIntFr.points.push_back(p);
     p.y *= -1;
-    marker->points.push_back(p);
+    markerIntFr.points.push_back(p);
     p.x *= -1;
-    marker->points.push_back(p);
+    markerIntFr.points.push_back(p);
+    for(int i =  0; i < frontLaserArrayMsgLen; i++){
+       
+        //if(secArrayExtFr.at(i) != 0){
+        //    ROS_WARN("%d",i);
+        //    ROS_INFO("%.2f",secArrayExtFr.at(i));  
+        //}
+    }
+
+   }
 }
 //Mode 2: This is a ellipse centered at the robot frame, with the long axis along the x axis of the robot frame.
 
@@ -377,6 +559,7 @@ void SecurityMargin::buildElliptic()
         markerIntFr.points.clear();
         markerExtFr.points.clear();
     }
+    ROS_ERROR("f1: %f, innerSec %f, extSecDist %f", f1,innerSecDistFront, extSecDistFront);
     for (double i = 0; i < frontLaserArrayMsgLen; i++)
     {
         p.x = f1*innerSecDistFront * cos(i / ((double)frontLaserArrayMsgLen) * 2 * M_PI);
@@ -456,26 +639,43 @@ bool SecurityMargin::checkObstacles(bool extPerimeter)
 {
     if (laser1Got)
     {
-        int i;
-        for ((secMode == 0 ? i = laserSecurityAngleFront : i = 0); i < (secMode == 0 ? frontLaserArrayMsgLen - laserSecurityAngleFront : frontLaserArrayMsgLen); i++)
+        cnt=0;
+        cnt2=0;
+        
+        for (int i = 0; i <  frontLaserArrayMsgLen ; i++)
         {
+            //ROS_INFO_THROTTLE(2,"En el for");
+            //ROS_INFO_THROTTLE(0.05,"i: %d, int: %.2f, ext: %.2f, laser: %.2f", i,secArrayFr.at(i), secArrayExtFr.at(i), laser1CPtr->ranges.at(i) );
             //It compare the scan element to secArray or secArrayExt depending the value of extPerimeter
+            
             if (laser1CPtr->ranges.at(i) < (extPerimeter ? secArrayExtFr.at(i) : secArrayFr.at(i)) && laser1CPtr->ranges.at(i) > laser1CPtr->range_min)
             {
 
-                securityAreaOccup1 = true;
-                markerExtFr.color = red;
+                if(cnt == 0)
+                    cnt2=i;
 
+                if(i-cnt2>200)
+                    cnt=0;
+
+                cnt++;
+                
                 if (pubMarkers)
                     SecurityMargin::publishRvizMarkers();
+                //ROS_INFO("HEY1");
+                if(cnt>25){
+                    
 
                 if (!extPerimeter)
                 {
+                    //ROS_INFO("HEY_EXT");
                     isInsideDangerousArea1 = true;
                     markerIntFr.color = red;
                 }
+                securityAreaOccup1 = true;
+                markerExtFr.color = red;
                 red1 = true;
                 return red1;
+                }
             }
         }
 
@@ -491,6 +691,7 @@ bool SecurityMargin::checkObstacles(bool extPerimeter)
         if (red1)
         {
             red1 = false;
+            
             if (pubMarkers)
                 SecurityMargin::publishRvizMarkers();
         }
@@ -545,11 +746,66 @@ bool SecurityMargin::canIMove()
 {
     SecurityMargin::refreshParams();
 
+    if(dist2goal.data < 1.5){
+        aproximating = true;
+    }else{
+        aproximating = false;
+    }
+    
+    if(goal_reached.data){
+        
+        //Aqui se espera el medio metro ese hasta que pone de nuevo aproximating a false
+
+        if (!tr0_catch)
+        {
+            goingAway = true;
+            dlt.x = 0;
+            dlt.y = 0;
+            tr1.transform.translation.x = 0;
+            tr1.transform.translation.y = 0;
+            try
+            {
+                tr0 = tfBuffer->lookupTransform("map", "base_link", ros::Time(0));
+                tr0_catch = true;
+                
+            }
+            catch (tf2::TransformException &ex)
+            {
+                ROS_WARN("No transform %s", ex.what());
+            }
+        }
+        else
+        {
+            try
+            {
+                tr1 = tfBuffer->lookupTransform("map", "base_link", ros::Time(0));
+                dlt.x = tr1.transform.translation.x - tr0.transform.translation.x;
+                dlt.y = tr1.transform.translation.y - tr0.transform.translation.y;
+                //ROS_ERROR("Aprox vel: %.2f ; Dist: %.2f", vel.linear.x, sqrtf(dlt.x * dlt.x + dlt.y * dlt.y));
+                if (sqrtf(dlt.x * dlt.x + dlt.y * dlt.y) > 1)
+                {   
+                    aproximating = false;
+                    goingAway  =false;
+                    goal_reached.data = false;
+                }
+            }
+            catch (tf2::TransformException &ex)
+            {
+                ROS_WARN("No transform %s", ex.what());
+            }
+            
+                        
+        }
+    }
+
+    if(!aproximating && !goingAway ){
+    
     if (pubMarkers)
         SecurityMargin::publishRvizMarkers();
 
     if (checkObstacles(0))
     {
+        //ROS_WARN("Inside 1");
         if (!stop_msg.data)
         {
             stop_msg.data = true;
@@ -559,10 +815,29 @@ bool SecurityMargin::canIMove()
         return false;
     }
 
-    if (!SecurityMargin::securityAreaFree())
+    if(onlyFront)
+    {
+        if(securityAreaOccup1)
+        {
+            if (checkObstacles(1))
+            {
+                //ROS_WARN("Inside 2_1");
+                if (!stop_msg.data)
+                {
+                    stop_msg.data = true;
+                    stop_pub.publish(stop_msg);
+                }
+
+                return false;
+            }
+        }
+
+    }
+    else if (!SecurityMargin::securityAreaFree())
     {
         if (checkObstacles(1))
         {
+            ROS_WARN("Inside 2");
             if (!stop_msg.data)
             {
                 stop_msg.data = true;
@@ -576,6 +851,7 @@ bool SecurityMargin::canIMove()
     {
         stop_msg.data = false;
         stop_pub.publish(stop_msg);
+    }
     }
     return true;
 }

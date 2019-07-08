@@ -17,7 +17,7 @@
 #include <tf/tf.h>
 #include <tf2_ros/transform_listener.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
-
+#include <std_msgs/Float32.h>
 #include <std_msgs/Bool.h>
 #include <std_msgs/UInt8MultiArray.h>
 #include <std_srvs/Trigger.h>
@@ -203,7 +203,7 @@ private:
 
   //Custom speed testing parameters
   float v,a,b,old_b;
-
+  float aproachDistance;
   float startOrientateDist;
 
   ros::NodeHandle *nh; //Pointer to the node node handle
@@ -215,13 +215,13 @@ private:
 
   tf2_ros::Buffer *tfBuffer;//Pointer to the tfBuffer created in the node
 
-  std_msgs::Bool muvingState, goalReached, localGoalOcc; //Flags that will be published 
+  std_msgs::Bool muvingState, goalReached, localGoalOcc, manoeuvreStatus; //Flags that will be published 
   
   
   //std_msgs::UInt8MultiArray red, green, blue, white; //Not used right know, maybe will be used to signalize the status of the robot with the leds
 
-  ros::Publisher twist_pub, muving_state_pub, goal_reached_pub, goal_pub, leds_pub; //Ros publishers 
-  
+  ros::Publisher twist_pub, muving_state_pub, goal_reached_pub, goal_pub, leds_pub,aproach_maneouvre_pub,dist2goal_pub; //Ros publishers 
+  std_msgs::Float32 dist2goal;
   people_msgs::People peopl;
   std::map<string, pair<float, float>> dist2people; 
   std::pair<string, pair<float,float>> closest;
@@ -237,9 +237,11 @@ private:
   ros::Duration d;
   float secs;
 
-  bool aproxComplete,tr0_catch;
+  bool aproxComplete,tr0_catch,factoryAproach, outOfTime;
   geometry_msgs::TransformStamped tr0,tr1;
   geometry_msgs::Vector3 dlt;
+  int n_goals;
+  bool traj_n_received;
 };
 
 } /*  namespace Navigators  */

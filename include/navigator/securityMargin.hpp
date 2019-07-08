@@ -18,6 +18,7 @@
 #include <sensor_msgs/LaserScan.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <std_msgs/Bool.h>
+#include <std_msgs/Float32.h>
 #include <trajectory_msgs/MultiDOFJointTrajectoryPoint.h>
 #include <trajectory_msgs/MultiDOFJointTrajectory.h>
 
@@ -35,7 +36,7 @@ public:
    * security margin If pubmarkers is true, it also publish the markers of the security arrays
    * @param *n: pointer to a node handle
   **/
-  SecurityMargin(ros::NodeHandle *n);
+  SecurityMargin(ros::NodeHandle *n, tf2_ros::Buffer *tfBuffer_);
 
   /**
    * This function plays the game. If something enter inside the inner margin(frontal or back) 
@@ -59,7 +60,9 @@ public:
   **/
   void laser1Callback(const sensor_msgs::LaserScanConstPtr &scan);
   void laser2Callback(const sensor_msgs::LaserScanConstPtr &scan);
-
+  void aproachManCb(const std_msgs::Bool::ConstPtr &msg);
+  void dist2GoalCb(const std_msgs::Float32::ConstPtr &msg);
+  void goalReachedCb(const std_msgs::Bool::ConstPtr &msg);
 private:
   
   void buildSelected();
@@ -67,7 +70,7 @@ private:
    * This function build the four security margins arrays and also 
    * the marker of each one if pub markers is set to true
   **/
-  void buildArraysSquare2(vector<float> *array, RVizMarker *marker, bool ext);
+  void buildArraysSquare2( bool ext);
   /**
    * 
    * 
@@ -134,13 +137,31 @@ private:
   
   ros::NodeHandle *nh;
   ros::Publisher marker_fr_1_pub, marker_fr_2_pub, marker_rr_1_pub, marker_rr_2_pub, stop_pub;
-  ros::Subscriber laser1_sub, laser2_sub;
+  ros::Subscriber laser1_sub, laser2_sub,aproach_man_sub, dist2goal_sub, goal_reached_sub;
   sensor_msgs::LaserScanConstPtr laser1CPtr, laser2CPtr;
-  std_msgs::Bool stop_msg;
+  std_msgs::Bool stop_msg,aproaching_status;
+  bool aproximating,tr0_catch;
+  geometry_msgs::Vector3 dlt;
+  geometry_msgs::TransformStamped tr0,tr1;
   std_msgs::ColorRGBA red, green;
   RVizMarker markerIntFr, markerExtFr, markerIntBack, markerExtBack;
   
   string laser1_topic, laser2_topic;
+
+  tf2_ros::Buffer *tfBuffer;
+  int cnt,cnt2;
+  //Square array
+  pair<float, float> p1, p2;
+  vector<float> a1, a2;
+  std_msgs::Float32 dist2goal;
+  float L1, L2, L;
+  float incr1, incr2;
+  int n1, n2;
+  //variables to avoid fake lasers detections
+  int count1,count2;
+
+  bool goingAway;
+  std_msgs::Bool goal_reached;
 };
 
 #endif

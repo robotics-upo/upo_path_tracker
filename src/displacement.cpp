@@ -18,13 +18,17 @@ void Displacement::refreshParams()
     ros::param::get("/nav_node/dist_margin", distMargin);
     ros::param::get("/nav_node/a", a);
     ros::param::get("/nav_node/b", b);
-    ros::param::get("/nav_node/traj_timeout", traj_timeout);
+    //ros::param::get("/nav_node/traj_timeout", traj_timeout);
     ros::param::get("/nav_node/start_orientate_dist", startOrientateDist);
 
     if (delta > traj_timeout)
     {
-        trajReceived = false;
-        Displacement::publishZeroVelocity();
+        if(!outOfTime){
+            outOfTime = true;
+            Displacement::publishZeroVelocity();
+        }        
+    }else{
+        outOfTime = false;
     }
     //The idea is to save the smallest distance to anyone and change the value of b according to this distance
     closest.second.first = std::numeric_limits<float>::max();
@@ -56,14 +60,17 @@ Displacement::Displacement(ros::NodeHandle *n, SecurityMargin *margin_, tf2_ros:
     twist_pub = nh->advertise<geometry_msgs::Twist>("/idmind_motors/twist", 1);
     muving_state_pub = nh->advertise<std_msgs::Bool>("/trajectory_tracker/muving_state", 1);
     goal_reached_pub = nh->advertise<std_msgs::Bool>("/trajectory_tracker/local_goal_reached", 1);
-    goal_pub = nh->advertise<PoseStamp>("/move_base_simple/goal", 1);
+    //goal_pub = nh->advertise<PoseStamp>("/move_base_simple/goal", 1);
     leds_pub = nh->advertise<std_msgs::UInt8MultiArray>("/idmind_sensors/set_leds", 1);
+    aproach_maneouvre_pub = nh->advertise<std_msgs::Bool>("/trajectory_tracker/aproach_manoeuvre",1);
 
+    dist2goal_pub = nh->advertise<std_msgs::Float32>("/dist2goal",0);
+    dist2goal.data = 0;
     nh->param("/nav_node/do_navigate", do_navigate, (bool)true);
     nh->param("/nav_node/holonomic", holonomic, (bool)true);
     nh->param("/nav_node/angular_max_speed", angularMaxSpeed, (float)0.5);
     nh->param("/nav_node/linear_max_speed", linearMaxSpeed, (float)0.3);
-    nh->param("/nav_node/angle_margin", angleMargin, (float)15);
+    nh->param("/nav_node/angle_margin", angleMargin, (float)10);
     nh->param("/nav_node/dist_margin", distMargin, (float)0.35);
     nh->param("/nav_node/a", a, (float)5);
     nh->param("/nav_node/b", b, (float)5);
@@ -71,7 +78,8 @@ Displacement::Displacement(ros::NodeHandle *n, SecurityMargin *margin_, tf2_ros:
     nh->param("/nav_node/start_orientate_dist", startOrientateDist, (float)0.025);
     nh->param("/nav_node/robot_base_frame", robot_frame, (string) "base_link");
     nh->param("/nav_node/world_frame", world_frame, (string) "map");
-
+    nh->param("/nav_node/aproach_factory", factoryAproach, (bool)0);
+    nh->param("/nav_node/aproach_distance",aproachDistance, (float)1);
     old_b = b;
 
     //Start flags values
@@ -79,13 +87,17 @@ Displacement::Displacement(ros::NodeHandle *n, SecurityMargin *margin_, tf2_ros:
     possible_to_move.data = true;
     localGoalOcc.data = false;
     goalReached.data = false;
+    outOfTime = false;
     //Flags for internal states
     homePublished = false;
     trajReceived = false;
     aproxComplete = false;
 
     tr0_catch = false;
+    n_goals = 0;    
     alpha = 30;
+    traj_n_received=false;
+    manoeuvreStatus.data=false;
 }
 void Displacement::occLocalGoalCb(const std_msgs::Bool::ConstPtr &msg)
 {
@@ -107,21 +119,34 @@ void Displacement::trackedPersonCb(const people_msgs::People::ConstPtr &pl)
 }
 void Displacement::trajectoryCb(const trajectory_msgs::MultiDOFJointTrajectory::ConstPtr &trj)
 {
-    trajReceived = true;
-    ros::param::get("/nav_node/traj_timeout", traj_timeout);
-
+    
+    //ros::param::get("/nav_node/traj_timeout", traj_timeout);
+    
     delta = ros::Time::now().toSec() - trj->header.stamp.toSec();
+    //if(outOfTime){
+    //    trajReceived = false;
+    //}else{
+    //trajReceived = true;
+    //}
 
+    trajReceived = true;
     //ROS_INFO("DELTA: %.3f\n now: %.3f",delta,ros::Time::now().toSec());
-
+    ROS_ERROR("en el callback de la trayectorias");
     nextPoint = trj->points[trj->points.size() > 1 ? 1 : 0];
+
 }
 
 //Used to calculate distance from base_link to global goal
 void Displacement::globalGoalCb(const geometry_msgs::PoseStampedConstPtr &globGoal_)
 {
+    
+    trajReceived = false;
     goalReached.data = false;
+    goal_reached_pub.publish(goalReached);
+     ROS_WARN("en el callback deL GOAL");
+
     aproxComplete = false;
+    tr0_catch = false;
     globalGoal = *globGoal_;
 }
 void Displacement::setRobotOrientation(geometry_msgs::Quaternion q, bool goal, bool pub, float speed, float angleMargin_)
@@ -146,7 +171,7 @@ void Displacement::setRobotOrientation(float finalYaw, bool goal, bool pub, floa
 
     robotPose = Displacement::transformPose(robotPose, robot_frame, world_frame);
     float robotYaw = Displacement::getYawFromQuat(robotPose.pose.orientation);
-
+    ROS_WARN("ROBOT yaw: %.2f", robotYaw);
     if (robotYaw < 0)
         robotYaw += 360;
     if (finalYaw < 0)
@@ -156,14 +181,19 @@ void Displacement::setRobotOrientation(float finalYaw, bool goal, bool pub, floa
 
     if (fabs(yawDif) > 180)
         yawDif -= 360 * yawDif / fabs(yawDif);
+    
+    ROS_ERROR("Yaw dif: %.2f", yawDif);
 
     if (fabs(yawDif) > angleMargin_)
     {
-        //This one works VERY WELL DONT TOUCH IT
-        Wz = 2 * (yawDif * (speed - 0.1) / (180 - angleMargin_) + speed - 180 / (180 - angleMargin_) * (speed - 0.1));
+        //This one works VERY WELL DONT TOUCH IT, antes era 2 en vez de 3
+        Wz = 3 * (yawDif * (speed - 0.1) / (180 - angleMargin_) + speed - 180 / (180 - angleMargin_) * (speed - 0.1));
+        //Wz = Displacement::getVel(0.7*angularMaxSpeed, a, fabs(yawDif)) *yawDif/fabs(yawDif);
+        ROS_WARN("dando velocidad");
     }
     else if (goal)
     {
+        ROS_WARN("GOAL REACHED");
         Displacement::setGoalReachedFlag(1);
         traj_timeout = std::numeric_limits<float>::max();
     }
@@ -176,11 +206,10 @@ void Displacement::aproximateTo(geometry_msgs::PoseStamped *pose, bool isGoal, b
 
     geometry_msgs::PoseStamped p = transformPose(*pose, world_frame, robot_frame);
 
-    Vx = p.pose.position.x;
-    Vy = p.pose.position.y;
+    Vx = p.pose.position.x/2;
+    Vy = p.pose.position.y/2;
 
-    Displacement::setRobotOrientation(getYawFromQuat(pose->pose.orientation), isGoal, 0, 1.7 * angularMaxSpeed, angleMargin);
-    Displacement::publishCmdVel();
+    Displacement::setRobotOrientation(getYawFromQuat(pose->pose.orientation), isGoal, 1, 1.3 * angularMaxSpeed, angleMargin);
 }
 /*
   *   The idea is to start moving in the direction of the nextPoint relative to base_link frame
@@ -204,7 +233,7 @@ void Displacement::moveHolon(double finalYaw)
 
     if (fabs(angle2NextPoint) > d2rad(angleMargin))
     {
-        Wz = Displacement::getVel(angularMaxSpeed, a, angle2NextPoint);
+        Wz = Displacement::getVel(angularMaxSpeed, 4*a, angle2NextPoint);
         if (fabs(angle2NextPoint) > M_PI_2)
         {
             Vx /= 1.5;
@@ -237,6 +266,8 @@ void Displacement::moveNonHolon()
 void Displacement::navigate()
 {
     Displacement::refreshParams();
+    ROS_WARN("goal reached? %d", goalReached.data);
+    ROS_WARN("Traj received? %d", trajReceived);
 
     if (trajReceived && !goalReached.data && do_navigate && !localGoalOcc.data && possible_to_move.data)
     {
@@ -255,6 +286,8 @@ void Displacement::navigate()
         globalGoalPose = Displacement::transformPose(globalGoal, world_frame, robot_frame);
         dist2GlobalGoal = Displacement::euclideanDistance(globalGoalPose);
         angle2GlobalGoal = Displacement::getYawFromQuat(globalGoalPose.pose.orientation);
+        dist2goal.data = dist2GlobalGoal;
+        dist2goal_pub.publish(dist2goal);
 
         if (dist2GlobalGoal < distMargin && !goalReached.data)
         {
@@ -271,15 +304,23 @@ void Displacement::navigate()
         }
         Displacement::publishCmdVel();
     }
-    if (goalReached.data && !aproxComplete)
+    if (goalReached.data && !aproxComplete && factoryAproach)
     {
-        ROS_WARN("Ejecutando acercamiento para carga marcha atras");
+        //ROS_WARN("Ejecutando acercamiento para carga marcha atras");
+        
         if (!tr0_catch)
         {
+            dlt.x =0;
+            dlt.y = 0;
+            tr1.transform.translation.x = 0;
+            tr1.transform.translation.y = 0;
             try
             {
-                tr0 = tfBuffer->lookupTransform("base_link", "odom", ros::Time(0));
+                tr0 = tfBuffer->lookupTransform(world_frame, robot_frame, ros::Time(0));
                 tr0_catch = true;
+                manoeuvreStatus.data = true;
+                aproach_maneouvre_pub.publish(manoeuvreStatus);
+                
             }
             catch (tf2::TransformException &ex)
             {
@@ -293,12 +334,12 @@ void Displacement::navigate()
         {
             try
             {
-                tr1 = tfBuffer->lookupTransform("base_link", "odom", ros::Time(0));
+                tr1 = tfBuffer->lookupTransform(world_frame, robot_frame, ros::Time(0));
                 dlt.x = tr1.transform.translation.x - tr0.transform.translation.x;
                 dlt.y = tr1.transform.translation.y - tr0.transform.translation.y;
-                vel.linear.x = Displacement::getVel(0.2, 2, 1 - sqrtf(dlt.x * dlt.x + dlt.y * dlt.y));
-                ROS_ERROR("Aprox vel: %.2f ; Dist: %.2f", vel.linear.x, sqrtf(dlt.x * dlt.x + dlt.y * dlt.y));
-                if (sqrtf(dlt.x * dlt.x + dlt.y * dlt.y) < 1)
+                vel.linear.x = -0.05-1*Displacement::getVel(0.2, 2, 1 - sqrtf(dlt.x * dlt.x + dlt.y * dlt.y));
+                //ROS_ERROR("Aprox vel: %.2f ; Dist: %.2f", vel.linear.x, sqrtf(dlt.x * dlt.x + dlt.y * dlt.y));
+                if (sqrtf(dlt.x * dlt.x + dlt.y * dlt.y) < aproachDistance)
                 {
                     twist_pub.publish(vel);
                 }
@@ -306,12 +347,17 @@ void Displacement::navigate()
                 {
                     aproxComplete = true;
                     tr0_catch = false;
+                    Displacement::publishZeroVelocity();
+                    manoeuvreStatus.data = false;
+                    aproach_maneouvre_pub.publish(manoeuvreStatus);
                 }
             }
             catch (tf2::TransformException &ex)
             {
                 ROS_WARN("No transform %s", ex.what());
             }
+            
+                        
         }
     }
 }
@@ -347,7 +393,7 @@ void Displacement::publishZeroVelocity()
 }
 void Displacement::setGoalReachedFlag(bool status_)
 {
-    goalReached.data = false;
+    //goalReached.data = false;
     if (status_)
     {
         goalReached.data = true;

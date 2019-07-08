@@ -22,9 +22,9 @@ nav_node:
   inner_radius: 0.3
   outer_radius: 0.4
   full_laser_topic: "/scan_multi"
-  
-  laser_front_topic: "/scanFront"
-  laser_rear_topic: "/scanBack"
+  security_stop_topic: "/security_stop"
+  laser_front_topic: "/scanFrontFiltered"
+  laser_rear_topic: "/scanBackFiltered"
   only_front: false 
   f_front: 1.2
   f_back: 1.2
