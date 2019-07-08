@@ -19,7 +19,7 @@ int main(int argc, char **argv)
 
     tf2_ros::TransformListener tfListener(tfBuffer);
 
-    SecurityMargin securityMargin(&n);
+    SecurityMargin securityMargin(&n, &tfBuffer);
 
     Navigators::SFMNav sfmcontroller(&n, &securityMargin, &tfBuffer);
 
