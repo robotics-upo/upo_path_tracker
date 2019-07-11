@@ -4,6 +4,26 @@ These classes are the ones used in the ARCO robot. The repository is composed of
 
 - nav_node: This is the main node, it instantiates two objects from the two classes mentioned above. 
 
+## Installation
+
+You need the full ROS Kinetic installation. Follow the steps in http://wiki.ros.org/kinetic/Installation/Ubuntu and choose 
+
+```
+sudo apt-get install ros-kinetic-desktop-full
+```
+
+Once ROS is installed, inside your catkin workspace, src folder:
+
+```
+git clone https://github.com/robotics-upo/arco_path_tracker.git
+```
+
+Return to the catkin workspace base path and do
+
+```
+catkin_make
+```
+
 ## Displacement class
 
 This is main path-tracking class. It receives a MultiDOFTrajectory and send velocity commands to follow it in two ways:
@@ -60,13 +80,13 @@ Depending on the mode you want to use, you need to pass it differents paramters.
 - outer_radius
 
 
-##SFMNav Class
+## SFMNav Class
 
 Local path tracker using a Social Force Model to adapt to people present in the environment.
 
 It is a substitute to the Displacement class.
 
-###Dependencies
+### Dependencies
 
 
 You should previously install the lightsfm library in your system:
@@ -75,7 +95,7 @@ You should previously install the lightsfm library in your system:
 - run make install there (the library is a set of .hpp files that will be used by the SFMNav node)
 
 
-###Topics
+### Topics
 
 Besides the topics published by Displacement, it adds a topic with markers for the social forces at:
 
