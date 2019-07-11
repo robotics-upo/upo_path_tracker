@@ -20,7 +20,6 @@
 #include <std_msgs/Float32.h>
 #include <std_msgs/Bool.h>
 #include <std_msgs/UInt8MultiArray.h>
-#include <std_srvs/Trigger.h>
 #include <trajectory_msgs/MultiDOFJointTrajectoryPoint.h>
 #include <trajectory_msgs/MultiDOFJointTrajectory.h>
 #include <people_msgs/People.h>
