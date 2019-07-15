@@ -58,8 +58,6 @@ Displacement::Displacement(ros::NodeHandle *n, SecurityMargin *margin_, tf2_ros:
     moving_state_pub = nh->advertise<std_msgs::Bool>("/trajectory_tracker/muving_state", 1);
     goal_reached_pub = nh->advertise<std_msgs::Bool>("/trajectory_tracker/local_goal_reached", 1);
     
-    aproach_maneouvre_pub = nh->advertise<std_msgs::Bool>("/trajectory_tracker/aproach_manoeuvre",1);
-
     dist2goal_pub = nh->advertise<std_msgs::Float32>("/dist2goal",0);
     dist2goal.data = 0;
     
@@ -75,7 +73,6 @@ Displacement::Displacement(ros::NodeHandle *n, SecurityMargin *margin_, tf2_ros:
     nh->param("/nav_node/start_orientate_dist", startOrientateDist, (float)0.025);
     nh->param("/nav_node/robot_base_frame", robot_frame, (string) "base_link");
     nh->param("/nav_node/world_frame", world_frame, (string) "map");
-    nh->param("/nav_node/aproach_distance",aproachDistance, (float)1);
     old_b = b;
 
     //Start flags values
@@ -86,14 +83,9 @@ Displacement::Displacement(ros::NodeHandle *n, SecurityMargin *margin_, tf2_ros:
     outOfTime = false;
 
     //Flags for internal states
-    homePublished = false;
     trajReceived = false;
 
-    tr0_catch = false;
-    n_goals = 0;    
     alpha = 30;
-    traj_n_received=false;
-    manoeuvreStatus.data=false;
 }
 void Displacement::occLocalGoalCb(const std_msgs::Bool::ConstPtr &msg)
 {
@@ -127,7 +119,6 @@ void Displacement::globalGoalCb(const geometry_msgs::PoseStampedConstPtr &globGo
     setGoalReachedFlag(0);
     ros::param::get("/nav_node/traj_timeout", traj_timeout);
     trajReceived = false;
-    tr0_catch = false;
 }
 void Displacement::setRobotOrientation(geometry_msgs::Quaternion q, bool goal, bool pub, float speed, float angleMargin_)
 {

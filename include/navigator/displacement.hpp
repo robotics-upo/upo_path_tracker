@@ -190,22 +190,35 @@ private:
 
   /**    Variables    **/
   string world_frame, robot_frame;
-  bool holonomic;//1 o 0(true or false)
-  bool finalOrientationOk, homePublished, trajReceived;//Control flags
-  bool do_navigate;
-  double Vx, Vy, Wz;//Velocity variables
-  double dist2GlobalGoal, dist2NextPoint;//Distances variables 
 
+  bool holonomic;//1 o 0(true or false)
+  bool trajReceived;//Control flags
+  bool do_navigate;
+  bool outOfTime;
+
+  float Vx, Vy, Wz;//Velocity variables
+  float dist2GlobalGoal, dist2NextPoint;//Distances variables 
   float angle2NextPoint, angle2GlobalGoal;//Angles variables
   float angleMargin, distMargin;//Margins 
   float angularMaxSpeed, linearMaxSpeed; //Top speeds 
 
   //Custom speed testing parameters
   float v,a,b,old_b;
-  float aproachDistance;
   float startOrientateDist;
+  float alpha;
+  float traj_timeout;
+  float delta;
+  float secs;
 
+  std::map<string, pair<float, float>> dist2people; 
+  std::pair<string, pair<float,float>> closest;
+  
   ros::NodeHandle *nh; //Pointer to the node node handle
+
+  ros::Publisher twist_pub, moving_state_pub, goal_reached_pub, goal_pub,dist2goal_pub; //Ros publishers 
+
+  ros::Time start;
+  ros::Duration d;
 
   geometry_msgs::Twist vel; //The twist message that will be published
   geometry_msgs::PoseStamped globalGoal, globalGoalPose; //global goal in base_link and map frame.It would be nice to rename
@@ -214,33 +227,13 @@ private:
 
   tf2_ros::Buffer *tfBuffer;//Pointer to the tfBuffer created in the node
 
-  std_msgs::Bool movingState, goalReached, localGoalOcc, manoeuvreStatus; //Flags that will be published 
-  
-  
-  //std_msgs::UInt8MultiArray red, green, blue, white; //Not used right know, maybe will be used to signalize the status of the robot with the leds
-
-  ros::Publisher twist_pub, moving_state_pub, goal_reached_pub, goal_pub, leds_pub,aproach_maneouvre_pub,dist2goal_pub; //Ros publishers 
+  std_msgs::Bool movingState, goalReached, localGoalOcc,possible_to_move; //Flags that will be published 
   std_msgs::Float32 dist2goal;
+
   people_msgs::People peopl;
-  std::map<string, pair<float, float>> dist2people; 
-  std::pair<string, pair<float,float>> closest;
-  float alpha;
 
   trajectory_msgs::MultiDOFJointTrajectoryPoint nextPoint; //next point of the trajetory received
- 
-  float traj_timeout;
-  float delta;
 
-  std_msgs::Bool possible_to_move;
-  ros::Time start;
-  ros::Duration d;
-  float secs;
-
-  bool aproxComplete,tr0_catch,factoryAproach, outOfTime;
-  geometry_msgs::TransformStamped tr0,tr1;
-  geometry_msgs::Vector3 dlt;
-  int n_goals;
-  bool traj_n_received;
 };
 
 } /*  namespace Navigators  */
