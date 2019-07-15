@@ -214,12 +214,12 @@ private:
 
   tf2_ros::Buffer *tfBuffer;//Pointer to the tfBuffer created in the node
 
-  std_msgs::Bool muvingState, goalReached, localGoalOcc, manoeuvreStatus; //Flags that will be published 
+  std_msgs::Bool movingState, goalReached, localGoalOcc, manoeuvreStatus; //Flags that will be published 
   
   
   //std_msgs::UInt8MultiArray red, green, blue, white; //Not used right know, maybe will be used to signalize the status of the robot with the leds
 
-  ros::Publisher twist_pub, muving_state_pub, goal_reached_pub, goal_pub, leds_pub,aproach_maneouvre_pub,dist2goal_pub; //Ros publishers 
+  ros::Publisher twist_pub, moving_state_pub, goal_reached_pub, goal_pub, leds_pub,aproach_maneouvre_pub,dist2goal_pub; //Ros publishers 
   std_msgs::Float32 dist2goal;
   people_msgs::People peopl;
   std::map<string, pair<float, float>> dist2people; 
