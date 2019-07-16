@@ -206,8 +206,8 @@ void Displacement::moveHolon(double finalYaw)
     Vy = sin(angle2NextPoint) * v;
 
     
-    if (fabs(angle2NextPoint) > d2rad(angleMargin))
-    {
+    //if (fabs(angle2NextPoint) > d2rad(angleMargin))
+    //{
         Wz = getVel(angularMaxSpeed, 4*a, angle2NextPoint);
         if (fabs(angle2NextPoint) > M_PI_2)
         {
@@ -219,7 +219,7 @@ void Displacement::moveHolon(double finalYaw)
             Vx /= 1.2;
             Vy /= 1.2;
         }
-    }
+    //}
 
     if (dist2GlobalGoal < startOrientateDist)
         setRobotOrientation(finalYaw, 0, 0, angularMaxSpeed, 10);

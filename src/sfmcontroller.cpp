@@ -52,8 +52,8 @@ SFMNav::SFMNav(ros::NodeHandle *n, SecurityMargin *margin_, tf2_ros::Buffer *tfB
 
     nh->param<bool>("do_navigate", do_navigate, true);
     nh->param<bool>("holonomic", holonomic, true);
-    nh->param<float>("angular_max_speed", angularMaxSpeed, 0.5);
-    nh->param<float>("linear_max_speed", linearMaxSpeed, 0.3);
+    nh->param<float>("angular_max_speed", angularMaxSpeed, 0.9);
+    nh->param<float>("linear_max_speed", linearMaxSpeed, 0.6);
 
     nh->param<float>("angle_margin", angleMargin, 15.0);
 
@@ -405,49 +405,7 @@ void SFMNav::navigate(double dt)
        }
        SFMNav::publishCmdVel();
     }
-    if (goalReached.data && !aproxComplete)
-    {
-        ROS_WARN("Ejecutando acercamiento para carga marcha atras");
-        if (!tr0_catch)
-        {
-            try
-            {
-                tr0 = tfBuffer->lookupTransform("base_link", "odom", ros::Time(0));
-                tr0_catch = true;
-            }
-            catch (tf2::TransformException &ex)
-            {
-                ROS_WARN("No transform %s", ex.what());
-            }
-
-            vel.linear.y = 0;
-            vel.angular.z = 0;
-        }
-        else
-        {
-            try
-            {
-                tr1 = tfBuffer->lookupTransform("base_link", "odom", ros::Time(0));
-                dlt.x = tr1.transform.translation.x - tr0.transform.translation.x;
-                dlt.y = tr1.transform.translation.y - tr0.transform.translation.y;
-                vel.linear.x = SFMNav::getVel(0.2, 2, 1 - sqrtf(dlt.x * dlt.x + dlt.y * dlt.y));
-                ROS_ERROR("Aprox vel: %.2f ; Dist: %.2f", vel.linear.x, sqrtf(dlt.x * dlt.x + dlt.y * dlt.y));
-                if (sqrtf(dlt.x * dlt.x + dlt.y * dlt.y) < 1)
-                {
-                   // twist_pub.publish(vel);
-                }
-                else
-                {
-                    aproxComplete = true;
-                    tr0_catch = false;
-                }
-            }
-            catch (tf2::TransformException &ex)
-            {
-                ROS_WARN("No transform %s", ex.what());
-            }
-        }
-    }
+   
 }
 
 /**
@@ -654,7 +612,7 @@ void SFMNav::laserReceived(const sensor_msgs::LaserScan::ConstPtr& scan)
 
 	agents[0].obstacles1.clear();
 	for (unsigned i=0; i<scan->ranges.size();i++) {
-		if (!std::isnan(scan->ranges[i]) && scan->ranges[i]<obstacle_distance_threshold) {
+		if (!std::isnan(scan->ranges[i]) && scan->ranges[i]<obstacle_distance_threshold && scan->ranges[i]>0.5) {
 			agents[0].obstacles1.emplace_back(scan->ranges[i]*alpha.cos(),scan->ranges[i]*alpha.sin());
 		}
 		alpha+=angle_inc;
