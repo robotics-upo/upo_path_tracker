@@ -55,11 +55,9 @@ Displacement::Displacement(ros::NodeHandle *n, SecurityMargin *margin_, tf2_ros:
 
     //Right now we will put the ARCO cmd vel topic but in the future it will selectable
     twist_pub = nh->advertise<geometry_msgs::Twist>("/idmind_motors/twist", 1);
-    muving_state_pub = nh->advertise<std_msgs::Bool>("/trajectory_tracker/muving_state", 1);
+    moving_state_pub = nh->advertise<std_msgs::Bool>("/trajectory_tracker/muving_state", 1);
     goal_reached_pub = nh->advertise<std_msgs::Bool>("/trajectory_tracker/local_goal_reached", 1);
     
-    aproach_maneouvre_pub = nh->advertise<std_msgs::Bool>("/trajectory_tracker/aproach_manoeuvre",1);
-
     dist2goal_pub = nh->advertise<std_msgs::Float32>("/dist2goal",0);
     dist2goal.data = 0;
     
@@ -75,8 +73,6 @@ Displacement::Displacement(ros::NodeHandle *n, SecurityMargin *margin_, tf2_ros:
     nh->param("/nav_node/start_orientate_dist", startOrientateDist, (float)0.025);
     nh->param("/nav_node/robot_base_frame", robot_frame, (string) "base_link");
     nh->param("/nav_node/world_frame", world_frame, (string) "map");
-    nh->param("/nav_node/aproach_factory", factoryAproach, (bool)0);
-    nh->param("/nav_node/aproach_distance",aproachDistance, (float)1);
     old_b = b;
 
     //Start flags values
@@ -87,15 +83,9 @@ Displacement::Displacement(ros::NodeHandle *n, SecurityMargin *margin_, tf2_ros:
     outOfTime = false;
 
     //Flags for internal states
-    homePublished = false;
     trajReceived = false;
-    aproxComplete = false;
 
-    tr0_catch = false;
-    n_goals = 0;    
     alpha = 30;
-    traj_n_received=false;
-    manoeuvreStatus.data=false;
 }
 void Displacement::occLocalGoalCb(const std_msgs::Bool::ConstPtr &msg)
 {
@@ -129,8 +119,6 @@ void Displacement::globalGoalCb(const geometry_msgs::PoseStampedConstPtr &globGo
     setGoalReachedFlag(0);
     ros::param::get("/nav_node/traj_timeout", traj_timeout);
     trajReceived = false;
-    aproxComplete = false;
-    tr0_catch = false;
 }
 void Displacement::setRobotOrientation(geometry_msgs::Quaternion q, bool goal, bool pub, float speed, float angleMargin_)
 {
@@ -244,10 +232,7 @@ void Displacement::navigate()
 
     if (trajReceived && !goalReached.data && do_navigate && !localGoalOcc.data && possible_to_move.data)
     {
-        if (aproxComplete)
-        {
-            aproxComplete = false;
-        }
+       
         Vx = 0;
         Vy = 0;
         Wz = 0;
@@ -277,60 +262,6 @@ void Displacement::navigate()
         }
         publishCmdVel();
     }
-    if (goalReached.data && !aproxComplete && factoryAproach)
-    {
-        
-        if (!tr0_catch)
-        {
-            dlt.x =0;
-            dlt.y = 0;
-            tr1.transform.translation.x = 0;
-            tr1.transform.translation.y = 0;
-            try
-            {
-                tr0 = tfBuffer->lookupTransform(world_frame, robot_frame, ros::Time(0));
-                tr0_catch = true;
-                manoeuvreStatus.data = true;
-                aproach_maneouvre_pub.publish(manoeuvreStatus);
-                
-            }
-            catch (tf2::TransformException &ex)
-            {
-                ROS_WARN("No transform %s", ex.what());
-            }
-
-            vel.linear.y = 0;
-            vel.angular.z = 0;
-        }
-        else
-        {
-            try
-            {
-                tr1 = tfBuffer->lookupTransform(world_frame, robot_frame, ros::Time(0));
-                dlt.x = tr1.transform.translation.x - tr0.transform.translation.x;
-                dlt.y = tr1.transform.translation.y - tr0.transform.translation.y;
-                vel.linear.x = -0.05-1*getVel(0.2, 2, 1 - sqrtf(dlt.x * dlt.x + dlt.y * dlt.y));
-                if (sqrtf(dlt.x * dlt.x + dlt.y * dlt.y) < aproachDistance)
-                {
-                    twist_pub.publish(vel);
-                }
-                else
-                {
-                    aproxComplete = true;
-                    tr0_catch = false;
-                    publishZeroVelocity();
-                    manoeuvreStatus.data = false;
-                    aproach_maneouvre_pub.publish(manoeuvreStatus);
-                }
-            }
-            catch (tf2::TransformException &ex)
-            {
-                ROS_WARN("No transform %s", ex.what());
-            }
-            
-                        
-        }
-    }
 }
 
 /**
@@ -357,10 +288,10 @@ void Displacement::publishZeroVelocity()
     vel.linear.x = Vy;
     vel.linear.y = Wz;
 
-    muvingState.data = false;
+    movingState.data = false;
 
     twist_pub.publish(vel);
-    muving_state_pub.publish(muvingState);
+    moving_state_pub.publish(movingState);
 }
 void Displacement::setGoalReachedFlag(bool status_)
 {
@@ -376,10 +307,10 @@ void Displacement::setGoalReachedFlag(bool status_)
 void Displacement::publishCmdVel()
 {
 
-    muvingState.data = true;
+    movingState.data = true;
 
     if (Vx == 0 && Vy == 0 && Wz == 0)
-        muvingState.data = false;
+        movingState.data = false;
 
     if (margin->canIMove())
     {
@@ -387,7 +318,7 @@ void Displacement::publishCmdVel()
         vel.linear.x = Vx;
         vel.linear.y = Vy;
         twist_pub.publish(vel);
-        muving_state_pub.publish(muvingState);
+        moving_state_pub.publish(movingState);
     }
     else
     {
