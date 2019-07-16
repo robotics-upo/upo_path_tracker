@@ -3,6 +3,7 @@
 These classes are the ones used in the ARCO robot. The repository is composed of two classes and one ros node.
 
 - nav_node: This is the main node, it instantiates two objects from the two classes mentioned above. 
+- sfm_nav_node: An alternative navigation mode implementing a social force model. 
 
 ## Installation
 
