@@ -1,8 +1,8 @@
 nav_node:
   #First security margin configuration
   #
-  robot_base_frame: "base_link"
-  world_frame: "map"
+  robot_base_frame: "/base_link"
+  world_frame: "/map"
 
 
   #Navigation parameters
@@ -17,26 +17,13 @@ nav_node:
   start_orientate_dist: 1.0
   
 
-  security_mode: 2
   f: 2
   inner_radius: 0.3
   outer_radius: 0.4
-  full_laser_topic: "/scan_multi"
-  security_stop_topic: "/security_stop"
-  laser_front_topic: "/scanFrontFiltered"
-  laser_rear_topic: "/scanBackFiltered"
-  only_front: false 
-  f_front: 1.2
-  f_back: 1.2
-  inner_radius_front: 0.25 #0.45
-  outer_radius_front: 0.4 #0.55 these two works good in open areas
-  inner_radius_back: 0.1
-  outer_radius_back: 0.3
-  laser_security_angle_front: 25
-  laser_security_angle_back: 40
-  publish_markers: true
+  full_laser_topic: "/scanMulti"
   
-  margin_y: 0.3
-  margin_x: 0.3
-  delta_d: 0.15
-  #Both types of parameters should be under the same namespace in order to be dynamically reconfigurable from the same node
+  security_stop_topic: "/security_stop"
+  front_laser_link_frame_id: "/scanFrontFiltered"
+
+  laser_security_angle_front: 25
+  publish_markers: true

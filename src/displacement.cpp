@@ -46,11 +46,12 @@ void Displacement::refreshParams()
     }
 }
 //Displacement Class functions
-Displacement::Displacement(ros::NodeHandle *n, SecurityMargin *margin_, tf2_ros::Buffer *tfBuffer_)
+Displacement::Displacement(ros::NodeHandle *n, tf2_ros::Buffer *tfBuffer_)
 {
     nh = n;
     //Pointer to the security margin object createdÃ§
-    margin = margin_;
+    margin.setParams(n);
+
     tfBuffer = tfBuffer_;
 
     //Right now we will put the ARCO cmd vel topic but in the future it will selectable
@@ -86,6 +87,7 @@ Displacement::Displacement(ros::NodeHandle *n, SecurityMargin *margin_, tf2_ros:
     trajReceived = false;
 
     alpha = 30;
+    Vx = Vy = Wz = 0;
 }
 void Displacement::occLocalGoalCb(const std_msgs::Bool::ConstPtr &msg)
 {
@@ -110,6 +112,7 @@ void Displacement::trajectoryCb(const trajectory_msgs::MultiDOFJointTrajectory::
     nextPoint = trj->points[trj->points.size() > 1 ? 1 : 0];
     trajReceived = true;
     delta = ros::Time::now().toSec() - trj->header.stamp.toSec();
+    margin.setMode(0);
 }
 
 //Used to calculate distance from base_link to global goal
@@ -177,6 +180,7 @@ void Displacement::aproximateTo(geometry_msgs::PoseStamped *pose, bool isGoal, b
     Vy = p.pose.position.y/2;
 
     setRobotOrientation(getYawFromQuat(pose->pose.orientation), isGoal, 1, 1.3 * angularMaxSpeed, angleMargin);
+    
 }
 /*
   *   The idea is to start moving in the direction of the nextPoint relative to base_link frame
@@ -251,6 +255,7 @@ void Displacement::navigate()
         {
             ROS_INFO_ONCE("Maniobra de aproximacion");
             aproximateTo(&globalGoal, 1, 0);
+            margin.setMode(1);
         }
         else if (holonomic)
         {
@@ -260,8 +265,9 @@ void Displacement::navigate()
         {
             moveNonHolon();
         }
-        publishCmdVel();
+        
     }
+    publishCmdVel();
 }
 
 /**
@@ -312,13 +318,14 @@ void Displacement::publishCmdVel()
     if (Vx == 0 && Vy == 0 && Wz == 0)
         movingState.data = false;
 
-    if (margin->canIMove())
+    if (margin.canIMove())
     {
         vel.angular.z = Wz;
         vel.linear.x = Vx;
         vel.linear.y = Vy;
         twist_pub.publish(vel);
         moving_state_pub.publish(movingState);
+        ROS_INFO("HELLO");
     }
     else
     {

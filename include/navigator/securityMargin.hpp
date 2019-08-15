@@ -19,13 +19,21 @@
 #include <visualization_msgs/MarkerArray.h>
 #include <std_msgs/Bool.h>
 #include <std_msgs/Float32.h>
+#include <std_srvs/Trigger.h>
 
+#define PRINTF_REGULAR  "\x1B[0m"
+#define PRINTF_RED  	"\x1B[31m"
+#define PRINTF_GREEN  	"\x1B[32m"
+#define PRINTF_YELLOW  	"\x1B[33m"
+#define PRINTF_BLUE  	"\x1B[34m"
+#define PRINTF_MAGENTA  "\x1B[35m"
+#define PRINTF_CYAN  	"\x1B[36m"
+#define PRINTF_WHITE	"\x1B[37m"
 
 using namespace std;
 
 class SecurityMargin
 {
-  typedef visualization_msgs::Marker RVizMarker;
 
 public:
   /**
@@ -34,7 +42,9 @@ public:
    * @param *n: pointer to a node handle
    * @param *tfBuffer_ : pointer to tfbuffer used by a tf listener
   **/
-  SecurityMargin(ros::NodeHandle *n, tf2_ros::Buffer *tfBuffer_);
+  SecurityMargin();
+
+  SecurityMargin(ros::NodeHandle *n);
 
   /**
    * This function plays the game. If something enter inside the inner margin(frontal or back) 
@@ -42,34 +52,31 @@ public:
    * If there is something inside the outer margin but out of the inner, it will return true
   **/
   bool canIMove();
-
-  /**
-   * Get the dangerAreaFree status flag
-  **/
-  bool dangerAreaFree();
-
-  /**
-   * Get the security area status flag
-  **/
-  bool securityAreaFree();
-
+  void setMode(int mode);
   /**
    * Callbacks to get the directly the laser information
   **/
   void laser1Callback(const sensor_msgs::LaserScanConstPtr &scan);
-  void laser2Callback(const sensor_msgs::LaserScanConstPtr &scan);
-  void aproachManCb(const std_msgs::Bool::ConstPtr &msg);
-  void dist2GoalCb(const std_msgs::Float32::ConstPtr &msg);
   void goalReachedCb(const std_msgs::Bool::ConstPtr &msg);
+  bool switchCtrlSrvCb(std_srvs::TriggerRequest &req, std_srvs::TriggerResponse &rep);
+
+    /**
+   * Put to default the parameters values if any on the parameter server
+   * It also put the flags to their initial values and if pub markers is set 
+   * to true it initilize the markers messages
+   * @param *n: pointer to a node handle
+  **/
+  void setParams(ros::NodeHandle *n);
+
 private:
   
-  void buildSelected();
+  //void buildSelected();
   /**
    * This function build the four security margins arrays and also 
    * the marker of each one if pub markers is set to true
    * @param ext: If you want to build the inner or the outer margin
   **/
-  void buildArraysSquare2(bool ext);
+  //void buildArraysSquare2(bool ext);
   /**
    * Used at the demo and other experiments
    * 
@@ -81,7 +88,7 @@ private:
    * 
    * 
   **/
-  void buildArrays();
+  //void buildArrays();
   /**
    * If only front is set to true, it only publishes the front security margin markers 
   **/
@@ -92,79 +99,36 @@ private:
    * @param whickOne: 1 to check the outer margins and 0 for the inner margin
    * @return: true if something inside the selected area
   **/
-  bool checkObstacles(bool extPerimeter);
+  bool checkObstacles();
 
-  /**
-   * Function used to refresh params when they are changed by dynamic reconfigure
-   * 
-  **/
-  void refreshParams();
-
-  /**
-   * Put to default the parameters values if any on the parameter server
-   * It also put the flags to their initial values and if pub markers is set 
-   * to true it initilize the markers messages
-   * @param *n: pointer to a node handle
-  **/
-  void setParams(ros::NodeHandle *n);
 
 
   /**     Variables      **/
-
-  bool laser1Got, laser2Got, lasersGot; //lasers control flags
-  bool onlyFront;                       //To use only frontal security margin
-  bool paramsConfigured;
-  bool red1, red2; //Flux control in checkObstacles function
-  bool isInsideDangerousArea1, securityAreaOccup1; //Information about the security status
-  bool isInsideDangerousArea2, securityAreaOccup2;
-  bool pubMarkers;
-  bool aproximating,tr0_catch;
-  bool goingAway;
   
-  int secMode;
-  int frontLaserArrayMsgLen, backLaserArrayMsgLen;     //721 for hokuyo lasers
-  //if it set 10-20, then the margin will check between 10 and 170º of the laser array angles
-  int laserSecurityAngleFront, laserSecurityAngleBack; //The angle to reduce the oppenning of the lasers data comparison
-  int cnt,cnt2; //Counters used to try to avoid the ghost in the lasers
-  int count1,count2; //Max values of the counters above(parameters) //TODO: They are not implemented yet
-  int n1, n2;
-  
-
-  //f es la relacion entre el semieje menor y el semieje mayor de la elipse de seguridad,
-  //es necesario en el caso de robots no simetricos como el ARCO y depende de su geometria
-  //Mas redondo menor f y viceversa
-  float f1, f2;
-  float innerSecDistFront, extSecDistFront, innerSecDistBack, extSecDistBack;
-  float margin_y, margin_x, delta_d;
-  //Used in the square margin mode
-  float L1, L2, L;
-  float incr1, incr2;
+  bool laserGot,paramsConfigured;
+  int status, laserMsgLen, cnt,cnt2;
+  float f,innerSecDistFront, extSecDistFront;
   
   //Frames and topics parameters
-  string base_link_frame, front_laser_link_frame, back_laser_link_frame;
-  string laser1_topic, laser2_topic;
+  string base_link_frame;
 
-  vector<float> secArrayFr, secArrayExtFr, secArrayBack, secArrayExtBack, a1, a2;
-  pair<float, float> p1, p2;
+  vector<float> secArrayFr, secArrayExtFr;
 
   ros::NodeHandle *nh;
-
-  ros::Publisher marker_fr_1_pub, marker_fr_2_pub, marker_rr_1_pub, marker_rr_2_pub, stop_pub;
+  ros::Publisher marker_int_pub, marker_ext_pub, stop_pub;
+  ros::ServiceServer enableManualSrv;
+  ros::ServiceClient stopMotorsSrv;
+  ros::Subscriber laser1_sub,aproach_man_sub, dist2goal_sub;
   
-  ros::Subscriber laser1_sub, laser2_sub,aproach_man_sub, dist2goal_sub, goal_reached_sub;
-  
-  sensor_msgs::LaserScanConstPtr laser1CPtr, laser2CPtr;
+  sensor_msgs::LaserScanConstPtr laserCPtr;
 
   geometry_msgs::Vector3 dlt;
   geometry_msgs::TransformStamped tr0,tr1;
 
-  std_msgs::ColorRGBA red, green;//Colors for RViz markers
+  std_msgs::ColorRGBA red, green,blue;//Colors for RViz markers
   std_msgs::Bool stop_msg,aproaching_status, goal_reached;
-  std_msgs::Float32 dist2goal;
   //Markers for RViz, *back markers are only used in the old arco (build array function with only_front paramter to true)
-  RVizMarker markerIntFr, markerExtFr, markerIntBack, markerExtBack;
-  
-  tf2_ros::Buffer *tfBuffer;
+  visualization_msgs::Marker markerIntFr, markerExtFr;
 
 };
 

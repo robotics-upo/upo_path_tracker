@@ -19,20 +19,20 @@ int main(int argc, char **argv)
 
     tf2_ros::TransformListener tfListener(tfBuffer);
 
-    SecurityMargin securityMargin(&n, &tfBuffer);
+    //SecurityMargin securityMargin(&n, &tfBuffer);
 
-    Navigators::SFMNav sfmcontroller(&n, &securityMargin, &tfBuffer);
+    //Navigators::SFMNav sfmcontroller(&n, &securityMargin, &tfBuffer);
 
     //SFM class subscribers
-    ros::Subscriber path_sub = n.subscribe("/trajectory_tracker/local_input_trajectory", 1, &Navigators::SFMNav::trajectoryCb, &sfmcontroller);
-    ros::Subscriber global_goal_sub = n.subscribe("/move_base_simple/goal", 1, &Navigators::SFMNav::globalGoalCb, &sfmcontroller);
-    ros::Subscriber people = n.subscribe("/people", 1, &Navigators::SFMNav::trackedPersonCb, &sfmcontroller);
-    ros::Subscriber imp = n.subscribe("/trajectory_tracker/impossible_to_find", 1, &Navigators::SFMNav::impossibleMoveCb, &sfmcontroller);
-    ros::Subscriber local_goal_occ_sub = n.subscribe("/trajectory_tracker/local_goal_occupied", 1, &Navigators::SFMNav::occLocalGoalCb, &sfmcontroller);
-
-    ros::Subscriber laser_sub = n.subscribe("/scanMulti", 1, &Navigators::SFMNav::laserReceived, &sfmcontroller);
-
-    ros::Subscriber odom_sub = n.subscribe("/odom", 1, &Navigators::SFMNav::odomReceived,&sfmcontroller);
+    // ros::Subscriber path_sub = n.subscribe("/trajectory_tracker/local_input_trajectory", 1, &Navigators::SFMNav::trajectoryCb, &sfmcontroller);
+    // ros::Subscriber global_goal_sub = n.subscribe("/move_base_simple/goal", 1, &Navigators::SFMNav::globalGoalCb, &sfmcontroller);
+    // ros::Subscriber people = n.subscribe("/people", 1, &Navigators::SFMNav::trackedPersonCb, &sfmcontroller);
+    // ros::Subscriber imp = n.subscribe("/trajectory_tracker/impossible_to_find", 1, &Navigators::SFMNav::impossibleMoveCb, &sfmcontroller);
+    // ros::Subscriber local_goal_occ_sub = n.subscribe("/trajectory_tracker/local_goal_occupied", 1, &Navigators::SFMNav::occLocalGoalCb, &sfmcontroller);
+// 
+    // ros::Subscriber laser_sub = n.subscribe("/scanMulti", 1, &Navigators::SFMNav::laserReceived, &sfmcontroller);
+// 
+    // ros::Subscriber odom_sub = n.subscribe("/odom", 1, &Navigators::SFMNav::odomReceived,&sfmcontroller);
 
     //ros::Subscriber pose_sub = n.subscribe("/amcl_pose", 1, &Navigators::SFMNav::poseReceived,&sfmcontroller);
 
@@ -49,9 +49,8 @@ int main(int argc, char **argv)
     {
 
         ros::spinOnce();
-        securityMargin.canIMove();
-
-        sfmcontroller.navigate(loop_rate.cycleTime().toSec());
+        //securityMargin.canIMove();
+        //sfmcontroller.navigate(loop_rate.cycleTime().toSec());
         loop_rate.sleep();
     }
 

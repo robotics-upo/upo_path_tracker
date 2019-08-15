@@ -7,7 +7,6 @@
 #include <dynamic_reconfigure/server.h>
 #include <arco_path_tracker/navConfig.h>
 
-
 void callback(arco_path_tracker::navConfig &config, uint32_t level);
 
 tf2_ros::Buffer tfBuffer;
@@ -19,9 +18,7 @@ int main(int argc, char **argv)
 
     tf2_ros::TransformListener tfListener(tfBuffer);
 
-    SecurityMargin securityMargin(&n, &tfBuffer);
-
-    Navigators::Displacement despl(&n, &securityMargin, &tfBuffer);
+    Navigators::Displacement despl(&n, &tfBuffer);
     //Displacement class subscribers
     ros::Subscriber path_sub = n.subscribe("/trajectory_tracker/local_input_trajectory", 1, &Navigators::Displacement::trajectoryCb, &despl);
     ros::Subscriber global_goal_sub = n.subscribe("/move_base_simple/goal", 1, &Navigators::Displacement::globalGoalCb, &despl);
@@ -29,7 +26,7 @@ int main(int argc, char **argv)
     ros::Subscriber imp = n.subscribe("/trajectory_tracker/impossible_to_find", 1, &Navigators::Displacement::impossibleMoveCb, &despl);
     ros::Subscriber local_goal_occ_sub = n.subscribe("/trajectory_tracker/local_goal_occupied", 1, &Navigators::Displacement::occLocalGoalCb, &despl);
 
-    ros::Rate loop_rate(40);
+    ros::Rate loop_rate(1);
 
     //Dynamic reconfigure
     dynamic_reconfigure::Server<arco_path_tracker::navConfig> server;
@@ -42,7 +39,7 @@ int main(int argc, char **argv)
     {
 
         ros::spinOnce();
-        securityMargin.canIMove();
+        //securityMargin.canIMove();
 
         despl.navigate();
         loop_rate.sleep();

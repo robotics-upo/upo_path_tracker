@@ -45,7 +45,7 @@ public:
    * @param *margin: Pointer to SecurityMargin object 
    * @param *tfBuffer: Pointer to tf2 buffer 
   **/
-  Displacement(ros::NodeHandle *n, SecurityMargin *margin_, tf2_ros::Buffer *tfBuffer_);
+  Displacement(ros::NodeHandle *n, tf2_ros::Buffer *tfBuffer_);
   
   /**
    * Make a aproximation manoeuvre smoothly
@@ -223,8 +223,6 @@ private:
   geometry_msgs::Twist vel; //The twist message that will be published
   geometry_msgs::PoseStamped globalGoal, globalGoalPose; //global goal in base_link and map frame.It would be nice to rename
 
-  SecurityMargin *margin;//Pointer to the security margin object used to evaluate if it can move
-
   tf2_ros::Buffer *tfBuffer;//Pointer to the tfBuffer created in the node
 
   std_msgs::Bool movingState, goalReached, localGoalOcc,possible_to_move; //Flags that will be published 
@@ -234,6 +232,7 @@ private:
 
   trajectory_msgs::MultiDOFJointTrajectoryPoint nextPoint; //next point of the trajetory received
 
+  SecurityMargin margin;
 };
 
 } /*  namespace Navigators  */
