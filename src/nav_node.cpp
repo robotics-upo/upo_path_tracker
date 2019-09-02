@@ -26,7 +26,7 @@ int main(int argc, char **argv)
     ros::Subscriber imp = n.subscribe("/trajectory_tracker/impossible_to_find", 1, &Navigators::Displacement::impossibleMoveCb, &despl);
     ros::Subscriber local_goal_occ_sub = n.subscribe("/trajectory_tracker/local_goal_occupied", 1, &Navigators::Displacement::occLocalGoalCb, &despl);
 
-    ros::Rate loop_rate(1);
+    ros::Rate loop_rate(20);
 
     //Dynamic reconfigure
     dynamic_reconfigure::Server<arco_path_tracker::navConfig> server;

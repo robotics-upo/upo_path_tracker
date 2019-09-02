@@ -32,14 +32,14 @@ bool SecurityMargin::switchCtrlSrvCb(std_srvs::TriggerRequest &req, std_srvs::Tr
 
     if (status==4)
     {
+        setMode(0);
         rep.message = "Mode changed to autonomous";
-        status = 0;
         rep.success = true;   
     }
     else
     {
+        setMode(1);
         rep.message = "Mode changed to manual";
-        status  = 4;
         rep.success = true;
     }
     return rep.success;
@@ -52,7 +52,7 @@ void SecurityMargin::setParams(ros::NodeHandle *n)
 
     nh->param("nav_node/security_stop_topic", topicPath, (string) "/security_stop");
     stop_pub = nh->advertise<std_msgs::Bool>(topicPath, 0);
-    nh->param("nav_node/robot_base_frame", base_link_frame, (string) "/base_link");
+    nh->param("nav_node/robot_base_frame", base_link_frame, (string) "base_link");
     nh->param("nav_node/full_laser_topic", topicPath, (string) "/scanMulti");
     laser1_sub = nh->subscribe<sensor_msgs::LaserScan>(topicPath.c_str(), 1, &SecurityMargin::laser1Callback, this);
     nh->param("nav_node/f", f, (float)1);
@@ -69,7 +69,6 @@ void SecurityMargin::setParams(ros::NodeHandle *n)
 
     //Control flags
     status = 0;
-
     laserGot = false;
 
     red.a = 1;
@@ -154,27 +153,27 @@ void SecurityMargin::publishRvizMarkers()
     case 0:
         markerIntFr.color = green;
         markerExtFr.color = green;
-        ROS_INFO(PRINTF_GREEN "0");
+        //ROS_INFO(PRINTF_GREEN "0");
         break;
     case 1:
         markerIntFr.color = red;
         markerExtFr.color = red;
-        ROS_INFO(PRINTF_RED "1");
+        //ROS_INFO(PRINTF_RED "1");
         break;
     case 2:
         markerIntFr.color = green;
         markerExtFr.color = red;
-        ROS_INFO(PRINTF_MAGENTA "2");
+        //ROS_INFO(PRINTF_MAGENTA "2");
         break;
     case 3:
         markerIntFr.color = green;
         markerExtFr.color = red;
-        ROS_INFO(PRINTF_YELLOW "3");
+        //ROS_INFO(PRINTF_YELLOW "3");
         break;
     case 4: 
         markerIntFr.color = blue;
         markerExtFr.color = blue;
-        ROS_INFO(PRINTF_BLUE"4");
+        //ROS_INFO(PRINTF_BLUE"4");
         break;
     default:
         break;
@@ -197,7 +196,7 @@ void SecurityMargin::publishRvizMarkers()
 bool SecurityMargin::checkObstacles()
 {
     bool ret;
-    cnt = cnt2 = 0;
+    cnt = cnt2 = 0;//Todo lo relacionado con esto es para evitar fantasmas y reflexiones de los laseres
     /*
     * Si entra algo en el radio menor, esperar hasta que salga del mayor para volver a mover <- Esta es la idea principal
     * 
@@ -211,7 +210,7 @@ bool SecurityMargin::checkObstacles()
             if (cnt > 10)
             { //forma basta de quitar fantasmas
                 //Si llega a 10 significa que si debe haber algo de verda
-                if ((status == 3 || status == 2)) //&&dangerAreaF )
+                if ((status == 3 || status == 2)) 
                     status = 1;
 
                 ret = true;
@@ -224,10 +223,7 @@ bool SecurityMargin::checkObstacles()
             }
         }
         if (cnt2 > 200 && cnt < 10 && (status == 0 || status == 3))
-        { //Reset counters only if security area is free before
-            cnt2 = 0;
-            cnt = 0;
-        }
+            cnt = cnt2 = 0;
     }
 
     if (status == 1)
@@ -267,14 +263,13 @@ bool SecurityMargin::checkObstacles()
             }
         }
         if (cnt2 > 200 && cnt < 10)
-        {
             cnt = cnt2 = 0;
-        }
+        
     }
+
     if (!extObst && status != 0)
-    {
         status = 0;
-    }
+    
     publishRvizMarkers();
     return false;
 }
@@ -297,21 +292,14 @@ bool SecurityMargin::canIMove()
         return ret;
     }
 
-    if (checkObstacles())
-    {
+    if (checkObstacles()){
         ret = false;
+        std_srvs::Trigger trg;
+        stopMotorsSrv.call(trg);
     }
-    else
-    {
-        ret  =true;
-    }
-
+        
     stop_msg.data = !ret;
-    ret = !stop_msg.data;
     stop_pub.publish(stop_msg);
-    std_srvs::Trigger trg;
-    
-    stopMotorsSrv.call(trg);
 
     return ret;
 }
