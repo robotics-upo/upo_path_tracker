@@ -94,8 +94,11 @@ public:
   void globalGoalCb(const geometry_msgs::PoseStampedConstPtr &globGoal_);
   void impossibleMoveCb(const std_msgs::Bool::ConstPtr &msg);
   void occLocalGoalCb(const std_msgs::Bool::ConstPtr &msg);
+
+  bool rotationSrvCb(std_srvs::TriggerRequest &req, std_srvs::TriggerResponse &rep);
 private:
 
+  bool rotateToRefresh();
   /**
    * Functions use to transform mainly between map and base_link frames
    * @param originalPose/point: The position we want to transform
@@ -195,6 +198,10 @@ private:
   bool trajReceived;//Control flags
   bool do_navigate;
   bool outOfTime;
+  bool recoveryRotation;
+  
+  float rec_rot,rot_start;
+
 
   float Vx, Vy, Wz;//Velocity variables
   float dist2GlobalGoal, dist2NextPoint;//Distances variables 
@@ -210,13 +217,17 @@ private:
   float delta;
   float secs;
 
+  visualization_msgs::Marker speed,rot_speed;
+
+
   std::map<string, pair<float, float>> dist2people; 
   std::pair<string, pair<float,float>> closest;
   
   ros::NodeHandle *nh; //Pointer to the node node handle
 
-  ros::Publisher twist_pub, moving_state_pub, goal_reached_pub, goal_pub,dist2goal_pub; //Ros publishers 
-
+  ros::Publisher twist_pub, moving_state_pub, goal_reached_pub, goal_pub,dist2goal_pub, speed_marker_pub; //Ros publishers 
+  ros::ServiceClient stop_planning_srv_client,pause_planning_srv_client;
+  ros::ServiceServer rotate_robot_srv;
   ros::Time start;
   ros::Duration d;
 
