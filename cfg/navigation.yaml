@@ -1,15 +1,15 @@
 nav_node:
   #First security margin configuration
   #
-  robot_base_frame: "/base_link"
-  world_frame: "/map"
+  robot_base_frame: "base_link"
+  world_frame: "map"
 
 
   #Navigation parameters
   holonomic: true
   angular_max_speed: 0.5
   linear_max_speed: 0.6 #0.65
-  angle_margin: 5 #for 1,5 rad/s and 0.6 m/s 10 degress works good in no holonomic way
+  angle_margin: 50 #for 1,5 rad/s and 0.6 m/s 10 degress works good in no holonomic way
   dist_margin: 0.25
   traj_timeout: 0.8 #0.025
   a: 1 # for no holonomic 2 its okey with the 1.5 rad/s speed
