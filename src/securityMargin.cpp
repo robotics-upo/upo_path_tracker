@@ -52,15 +52,18 @@ void SecurityMargin::setParams(ros::NodeHandle *n)
 
     nh->param("nav_node/security_stop_topic", topicPath, (string) "/security_stop");
     stop_pub = nh->advertise<std_msgs::Bool>(topicPath, 0);
+
     nh->param("nav_node/robot_base_frame", base_link_frame, (string) "base_link");
     nh->param("nav_node/full_laser_topic", topicPath, (string) "/scanMulti");
+    
     laser1_sub = nh->subscribe<sensor_msgs::LaserScan>(topicPath.c_str(), 1, &SecurityMargin::laser1Callback, this);
+    
     nh->param("nav_node/f", f, (float)1);
     nh->param("nav_node/inner_radius", innerSecDistFront, (float)0.3);
     nh->param("nav_node/outer_radius", extSecDistFront, (float)0.45);
     
     enableManualSrv = nh->advertiseService("/switch_control_mode", &SecurityMargin::switchCtrlSrvCb, this);
-    stopMotorsSrv =  nh->serviceClient<std_srvs::Trigger>("/security_stop");
+    stopMotorsSrv =  nh->serviceClient<std_srvs::Trigger>("/security_stop_srv");
 
     ROS_INFO("Robot base frame: %s", base_link_frame.c_str());
     ROS_INFO("F factor: %.2f", f);
@@ -207,7 +210,7 @@ bool SecurityMargin::checkObstacles()
         if (laserCPtr->ranges.at(i) < secArrayFr.at(i) && laserCPtr->ranges.at(i) > laserCPtr->range_min)
         {
             //Algo hay dentro del margen interior
-            if (cnt > 10)
+            if (cnt > 25)
             { //forma basta de quitar fantasmas
                 //Si llega a 10 significa que si debe haber algo de verda
                 if ((status == 3 || status == 2)) 
@@ -222,7 +225,7 @@ bool SecurityMargin::checkObstacles()
                 cnt++;
             }
         }
-        if (cnt2 > 200 && cnt < 10 && (status == 0 || status == 3))
+        if (cnt2 > 200 && cnt < 25 && (status == 0 || status == 3))
             cnt = cnt2 = 0;
     }
 
@@ -242,7 +245,7 @@ bool SecurityMargin::checkObstacles()
     { //Ahora si se ha llegao hasta aqui significa que no ha habido ningun obstaculo
         if (laserCPtr->ranges.at(i) < secArrayExtFr.at(i) && laserCPtr->ranges.at(i) > laserCPtr->range_min)
         {
-            if (cnt > 10)
+            if (cnt > 25)
             {
                 if (status == 2)
                 {
@@ -262,7 +265,7 @@ bool SecurityMargin::checkObstacles()
                 cnt++;
             }
         }
-        if (cnt2 > 200 && cnt < 10)
+        if (cnt2 > 200 && cnt < 25)
             cnt = cnt2 = 0;
         
     }
