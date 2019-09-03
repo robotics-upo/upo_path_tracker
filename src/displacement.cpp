@@ -88,6 +88,7 @@ Displacement::Displacement(ros::NodeHandle *n, tf2_ros::Buffer *tfBuffer_)
     localGoalOcc.data = false;
     goalReached.data = false;
     outOfTime = false;
+    recoveryRotation = false;
 
     //Flags for internal states
     trajReceived = false;
@@ -157,17 +158,16 @@ bool Displacement::rotationSrvCb(std_srvs::TriggerRequest &req, std_srvs::Trigge
 bool Displacement::rotateToRefresh()
 {
     recoveryRotation = true;
-    rec_rot = 0;
+    
     PoseStamp bl_pose;
+    
     bl_pose.pose.position.x = 0;
     bl_pose.pose.position.y = 0;
 
-    bl_pose.pose.orientation.w = 0;
+    bl_pose.pose.orientation.w = 1;
     bl_pose.pose.orientation.z = 0;
 
-    bl_pose = transformPose(bl_pose, robot_frame, world_frame);
-
-    rot_start = getYawFromQuat(bl_pose.pose.orientation);
+    start_pose = transformPose(bl_pose, robot_frame, world_frame);
 
     return true;
 }
@@ -317,26 +317,17 @@ void Displacement::navigate()
         
         Vx = 0;
         Vy = 0;
-        Wz = angularMaxSpeed/1.5;
-        PoseStamp pose;
-        pose.pose.orientation.w = 0;
-        pose.pose.orientation.z = 0;
+        Wz = angularMaxSpeed;
 
-        pose.pose.position.x = 0;
-        pose.pose.position.y = 0;
-
-        pose = transformPose(pose, robot_frame, world_frame);
-
-        rec_rot += getYawFromQuat(pose.pose.orientation)-rot_start;
-
-        if(rec_rot > 0.9*2*M_PI){
+        if(ros::Time::now() - start_pose.header.stamp > ros::Duration(2*M_PI / Wz) ){
             recoveryRotation = false;
+            Wz = 0;
         }
         
         publishCmdVel();
 
     }
-    if (trajReceived && !goalReached.data && do_navigate && !localGoalOcc.data && possible_to_move.data && !recoveryRotation)
+    if ( trajReceived && !goalReached.data && do_navigate && !localGoalOcc.data && possible_to_move.data && !recoveryRotation)
     {
 
         Vx = 0;
@@ -462,7 +453,7 @@ PoseStamp Displacement::transformPose(trajectory_msgs::MultiDOFJointTrajectoryPo
     PoseStamp pose;
     pose.header.frame_id = from;
     pose.header.seq = rand();
-    pose.header.stamp = ros::Time(0);
+    pose.header.stamp = ros::Time::now();
 
     pose.pose.orientation = point.transforms[0].rotation;
 

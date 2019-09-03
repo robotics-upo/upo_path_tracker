@@ -234,6 +234,7 @@ private:
   geometry_msgs::Twist vel; //The twist message that will be published
   geometry_msgs::PoseStamped globalGoal, globalGoalPose; //global goal in base_link and map frame.It would be nice to rename
 
+  PoseStamp start_pose; //Used in recov rot
   tf2_ros::Buffer *tfBuffer;//Pointer to the tfBuffer created in the node
 
   std_msgs::Bool movingState, goalReached, localGoalOcc,possible_to_move; //Flags that will be published 

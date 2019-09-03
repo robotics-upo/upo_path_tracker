@@ -1,29 +1,23 @@
 nav_node:
-  #First security margin configuration
-  #
+
   robot_base_frame: "base_link"
   world_frame: "map"
-
 
   #Navigation parameters
   holonomic: true
   angular_max_speed: 0.5
-  linear_max_speed: 0.6 #0.65
-  angle_margin: 50 #for 1,5 rad/s and 0.6 m/s 10 degress works good in no holonomic way
+  linear_max_speed: 0.1 #0.6
+  angle_margin: 10 #for 1,5 rad/s and 0.6 m/s 10 degress works good in no holonomic way
   dist_margin: 0.25
   traj_timeout: 0.8 #0.025
   a: 1 # for no holonomic 2 its okey with the 1.5 rad/s speed
   b: 5
   start_orientate_dist: 1.0
   
+  #security margin params
 
   f: 2
-  inner_radius: 0.3
-  outer_radius: 0.4
+  inner_radius: 0.1
+  outer_radius: 0.15
   full_laser_topic: "/scanMulti"
-  
   security_stop_topic: "/security_stop"
-  front_laser_link_frame_id: "/scanFrontFiltered"
-
-  laser_security_angle_front: 25
-  publish_markers: true
