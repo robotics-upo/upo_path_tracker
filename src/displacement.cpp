@@ -64,10 +64,16 @@ Displacement::Displacement(ros::NodeHandle *n, tf2_ros::Buffer *tfBuffer_)
     speed_marker_pub = nh->advertise<visualization_msgs::Marker>("/speed_marker", 1);
     dist2goal_pub = nh->advertise<std_msgs::Float32>("/dist2goal", 0);
     dist2goal.data = 0;
+
+    approach_man_pub =nh->advertise<std_msgs::Bool>("/trajectory_tracker/aproach_manoeuvre",1);
     stop_planning_srv_client = nh->serviceClient<std_srvs::Trigger>("/local_planner_node/stop_planning_srv");
     pause_planning_srv_client = nh->serviceClient<std_srvs::Trigger>("/local_planner_node/pause_planning_srv");
     rotate_robot_srv = nh->advertiseService("/nav_node/rotate_server", &Displacement::rotationSrvCb, this);
+    
+    rot_recovery_status_pub = nh->advertise<std_msgs::Bool>("/nav_node/rot_recovery_status",1);
 
+	pause_nav_srv = nh->advertiseService("/nav_node/pause_navigation_srv", &Displacement::pauseNavSrv, this);
+	
     nh->param("/nav_node/do_navigate", do_navigate, (bool)true);
     nh->param("/nav_node/holonomic", holonomic, (bool)true);
     nh->param("/nav_node/angular_max_speed", angularMaxSpeed, (float)0.5);
@@ -85,7 +91,10 @@ Displacement::Displacement(ros::NodeHandle *n, tf2_ros::Buffer *tfBuffer_)
     //Start flags values
     //Flags to publish
     possible_to_move.data = true;
+
+    rot.data = false;
     localGoalOcc.data = false;
+    
     goalReached.data = false;
     outOfTime = false;
     recoveryRotation = false;
@@ -138,11 +147,23 @@ Displacement::Displacement(ros::NodeHandle *n, tf2_ros::Buffer *tfBuffer_)
     rot_speed.pose.orientation.z = quat.getZ();
     rot_speed.pose.orientation.w = quat.getW();
 }
+bool Displacement::pauseNavSrv(std_srvs::TriggerRequest &req, std_srvs::TriggerResponse &rep){
+	
+
+	if(do_navigate){
+        do_navigate = false;
+         publishZeroVelocity();
+    }else{
+        do_navigate = true;
+    }
+	
+}
 bool Displacement::rotationSrvCb(std_srvs::TriggerRequest &req, std_srvs::TriggerResponse &rep)
 {
 
     bool suc = rotateToRefresh();
-
+    rot.data  =true;
+    rot_recovery_status_pub.publish(rot);
     if (suc)
     {
         rep.message = "Rotation done succesfully";
@@ -181,7 +202,7 @@ void Displacement::occLocalGoalCb(const std_msgs::Bool::ConstPtr &msg)
 }
 void Displacement::impossibleMoveCb(const std_msgs::Bool::ConstPtr &msg)
 {
-    possible_to_move.data = !(msg->data);
+    //possible_to_move.data = !(msg->data);
 }
 void Displacement::trackedPersonCb(const people_msgs::People::ConstPtr &pl)
 {
@@ -193,6 +214,10 @@ void Displacement::trajectoryCb(const trajectory_msgs::MultiDOFJointTrajectory::
 {
     nextPoint = trj->points[trj->points.size() > 1 ? 1 : 0];
     trajReceived = true;
+    last_trj_stamp = trj->header.stamp;
+    
+    //do_navigate = true; 
+
     delta = ros::Time::now().toSec() - trj->header.stamp.toSec();
     margin.setMode(0);
 }
@@ -201,6 +226,7 @@ void Displacement::trajectoryCb(const trajectory_msgs::MultiDOFJointTrajectory::
 void Displacement::globalGoalCb(const geometry_msgs::PoseStampedConstPtr &globGoal_)
 {
     globalGoal = *globGoal_;
+    time_count = ros::Time::now();
     setGoalReachedFlag(0);
     ros::param::get("/nav_node/traj_timeout", traj_timeout);
     trajReceived = false;
@@ -327,9 +353,20 @@ void Displacement::navigate()
         publishCmdVel();
 
     }
-    if ( trajReceived && !goalReached.data && do_navigate && !localGoalOcc.data && possible_to_move.data && !recoveryRotation)
+    if( ros::Time::now() - last_trj_stamp > ros::Duration(0.5) ){
+        if(!timeout)
+            publishZeroVelocity();
+            
+        timeout = true;
+    }else{
+        timeout = false; 
+    }
+    if ( trajReceived && !goalReached.data && do_navigate && !localGoalOcc.data && possible_to_move.data && !recoveryRotation && !timeout)
     {
-
+        if(rot.data){
+            rot.data  =false;
+            rot_recovery_status_pub.publish(rot);
+        }
         Vx = 0;
         Vy = 0;
         Wz = 0;
@@ -343,9 +380,9 @@ void Displacement::navigate()
         angle2GlobalGoal = getYawFromQuat(globalGoalPose.pose.orientation);
         dist2goal.data = dist2GlobalGoal;
         dist2goal_pub.publish(dist2goal);
+ 
 
-
-        if (dist2GlobalGoal < 1)
+        if (dist2GlobalGoal < 1 || ros::Time::now() - time_count < ros::Duration(2) )
         {
             margin.setMode(1);
         }
@@ -353,6 +390,9 @@ void Displacement::navigate()
         {
             ROS_INFO_ONCE("Maniobra de aproximacion");
             aproximateTo(&globalGoal, 1, 0);
+            std_msgs::Bool flg;
+            flg.data = true;
+            approach_man_pub.publish(flg);
             margin.setMode(1);
         }
         else if (holonomic)
@@ -406,6 +446,9 @@ void Displacement::setGoalReachedFlag(bool status_)
         ROS_WARN("llEGUE");
         std_srvs::Trigger trg;
         stop_planning_srv_client.call(trg);
+        std_msgs::Bool flg;
+        flg.data = false;
+        approach_man_pub.publish(flg);
     }
     else
     {
@@ -423,6 +466,14 @@ void Displacement::publishCmdVel()
 
     if (margin.canIMove())
     {
+        if(planingPaused){
+            ROS_INFO("Playing planning again");
+            std_srvs::Trigger trg;
+            //pause_planning_srv_client.call(trg);
+            planingPaused = false;
+            
+        }
+        ROS_INFO("i CAN MOVE AGAIN");
         vel.angular.z = Wz;
         vel.linear.x = Vx;
         vel.linear.y = Vy;
@@ -433,18 +484,23 @@ void Displacement::publishCmdVel()
         quat.setRPY(0, 0, yaw); // Create this quatern
         speed.pose.orientation.z = quat.getZ();
         speed.pose.orientation.w = quat.getW();
+        
         speed_marker_pub.publish(speed);
         rot_speed.scale.x = -2 * Wz; //Minus sign is to follow right hand rule
         speed_marker_pub.publish(rot_speed);
         twist_pub.publish(vel);
-
-        moving_state_pub.publish(movingState);
+        moving_state_pub.publish(movingState);   
     }
     else
     {
-        publishZeroVelocity();
-        std_srvs::Trigger trg;
-        pause_planning_srv_client.call(trg);
+        if(!planingPaused){
+            //std_srvs::Trigger trg;
+            publishZeroVelocity();
+            //pause_planning_srv_client.call(trg);
+        }
+        ROS_WARN("I cant move, pausing planing");
+        planingPaused = true;
+        
     }
 }
 

@@ -96,6 +96,8 @@ public:
   void occLocalGoalCb(const std_msgs::Bool::ConstPtr &msg);
 
   bool rotationSrvCb(std_srvs::TriggerRequest &req, std_srvs::TriggerResponse &rep);
+  bool pauseNavSrv(std_srvs::TriggerRequest &req, std_srvs::TriggerResponse &rep);
+  
 private:
 
   bool rotateToRefresh();
@@ -225,9 +227,9 @@ private:
   
   ros::NodeHandle *nh; //Pointer to the node node handle
 
-  ros::Publisher twist_pub, moving_state_pub, goal_reached_pub, goal_pub,dist2goal_pub, speed_marker_pub; //Ros publishers 
+  ros::Publisher twist_pub, moving_state_pub, goal_reached_pub, goal_pub,dist2goal_pub, speed_marker_pub,approach_man_pub, rot_recovery_status_pub; //Ros publishers 
   ros::ServiceClient stop_planning_srv_client,pause_planning_srv_client;
-  ros::ServiceServer rotate_robot_srv;
+  ros::ServiceServer rotate_robot_srv,pause_nav_srv;
   ros::Time start;
   ros::Duration d;
 
@@ -237,7 +239,7 @@ private:
   PoseStamp start_pose; //Used in recov rot
   tf2_ros::Buffer *tfBuffer;//Pointer to the tfBuffer created in the node
 
-  std_msgs::Bool movingState, goalReached, localGoalOcc,possible_to_move; //Flags that will be published 
+  std_msgs::Bool movingState, goalReached, localGoalOcc,possible_to_move,rot; //Flags that will be published 
   std_msgs::Float32 dist2goal;
 
   people_msgs::People peopl;
@@ -245,6 +247,10 @@ private:
   trajectory_msgs::MultiDOFJointTrajectoryPoint nextPoint; //next point of the trajetory received
 
   SecurityMargin margin;
+  
+  bool timeout = false;
+  bool planingPaused = false;
+  ros::Time last_trj_stamp, time_count;
 };
 
 } /*  namespace Navigators  */

@@ -207,10 +207,10 @@ bool SecurityMargin::checkObstacles()
     for (auto i = 0; i < laserMsgLen; i++, cnt2++)
     {
 
-        if (laserCPtr->ranges.at(i) < secArrayFr.at(i) && laserCPtr->ranges.at(i) > laserCPtr->range_min)
+        if (laserCPtr->ranges.at(i) < secArrayFr.at(i) && laserCPtr->ranges.at(i) > 0.2 ) //laserCPtr->range_min)
         {
             //Algo hay dentro del margen interior
-            if (cnt > 25)
+            if (cnt > 20)
             { //forma basta de quitar fantasmas
                 //Si llega a 10 significa que si debe haber algo de verda
                 if ((status == 3 || status == 2)) 
@@ -225,12 +225,13 @@ bool SecurityMargin::checkObstacles()
                 cnt++;
             }
         }
-        if (cnt2 > 200 && cnt < 25 && (status == 0 || status == 3))
+        if (cnt2 > 300 && cnt < 20 && (status == 0 || status == 3))
             cnt = cnt2 = 0;
     }
 
     if (status == 1)
     {
+        ROS_WARN("Status 2");
         status = 2;
         ret = true;
         publishRvizMarkers();
@@ -239,39 +240,44 @@ bool SecurityMargin::checkObstacles()
 
     cnt = cnt2 = 0;
 
-    bool extObst = false;
 
     for (auto i = 0; i < laserMsgLen; i++, cnt2++)
     { //Ahora si se ha llegao hasta aqui significa que no ha habido ningun obstaculo
         if (laserCPtr->ranges.at(i) < secArrayExtFr.at(i) && laserCPtr->ranges.at(i) > laserCPtr->range_min)
         {
-            if (cnt > 25)
+            if (cnt > 20)
             {
                 if (status == 2)
                 {
                     ret = true;
                     publishRvizMarkers();
+                    ROS_WARN("Status 2");
                     return ret;
                 }
                 if (status == 0)
                 {
                     publishRvizMarkers();
                     status = 3;
+                    ret = false;
+                    ROS_WARN("Status set to 3 from 0");
+                    return ret;
+                    
                 }
-                extObst = true;
             }
             else
             {
                 cnt++;
             }
         }
-        if (cnt2 > 200 && cnt < 25)
+        if (cnt2 > 300 && cnt < 20)
             cnt = cnt2 = 0;
         
     }
 
-    if (!extObst && status != 0)
+    if (status == 3){
         status = 0;
+        ROS_WARN("STATUS RESET TO 0");
+    }
     
     publishRvizMarkers();
     return false;
@@ -300,9 +306,12 @@ bool SecurityMargin::canIMove()
         std_srvs::Trigger trg;
         stopMotorsSrv.call(trg);
     }
-        
-    stop_msg.data = !ret;
-    stop_pub.publish(stop_msg);
+    
+    if(stop_msg.data != !ret){
+        stop_msg.data = !ret;
+        stop_pub.publish(stop_msg);
+    }
+    
 
     return ret;
 }
