@@ -385,14 +385,15 @@ void Displacement::navigate()
         if (dist2GlobalGoal < 1 || ros::Time::now() - time_count < ros::Duration(2) )
         {
             margin.setMode(1);
+            std_msgs::Bool flg;
+            flg.data = true;
+            approach_man_pub.publish(flg);
         }
         if (dist2GlobalGoal < distMargin && !goalReached.data)
         {
             ROS_INFO_ONCE("Maniobra de aproximacion");
             aproximateTo(&globalGoal, 1, 0);
-            std_msgs::Bool flg;
-            flg.data = true;
-            approach_man_pub.publish(flg);
+            
             margin.setMode(1);
         }
         else if (holonomic)

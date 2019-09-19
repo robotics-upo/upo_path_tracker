@@ -240,6 +240,15 @@ bool SecurityMargin::checkObstacles()
 
     cnt = cnt2 = 0;
 
+    bool extObst = false;
+// 0: All alright
+// 1: algo dentro del margen interno
+// 2: habia algo en el interno y ahora ha salido al externo
+// 3: hay algo en el margen externo pero no ha entrado en el interno
+
+//! Cuando algo entre la sucesion temporal de estados debe ser
+//? 0->3->1->2->0
+//!Si solo se tienen en cuenta los obstaculos que entran desde fuera tal vez se puedan evitar las reflexiones y fantasmas de los laseres
 
     for (auto i = 0; i < laserMsgLen; i++, cnt2++)
     { //Ahora si se ha llegao hasta aqui significa que no ha habido ningun obstaculo
@@ -263,6 +272,7 @@ bool SecurityMargin::checkObstacles()
                     return ret;
                     
                 }
+                extObst = true;
             }
             else
             {
