@@ -8,13 +8,11 @@
 #include <nav_msgs/Odometry.h>
 #include <sensor_msgs/LaserScan.h>
 
-
 namespace Navigators
 {
 
 void SFMNav::refreshParams()
 {
-    ros::param::get("/nav_node/holonomic", holonomic);
     ros::param::get("/nav_node/do_navigate", do_navigate);
     ros::param::get("/nav_node/angular_max_speed", angularMaxSpeed);
     ros::param::get("/nav_node/linear_max_speed", linearMaxSpeed);
@@ -23,14 +21,12 @@ void SFMNav::refreshParams()
     ros::param::get("/nav_node/a", a);
     ros::param::get("/nav_node/b", b);
     ros::param::get("/nav_node/traj_timeout", traj_timeout);
-    ros::param::get("/nav_node/start_orientate_dist", startOrientateDist);
 
     if (delta > traj_timeout)
     {
         trajReceived = false;
         SFMNav::publishZeroVelocity();
     }
-   
 }
 //Displacement Class functions
 SFMNav::SFMNav(ros::NodeHandle *n, SecurityMargin *margin_, tf2_ros::Buffer *tfBuffer_)
@@ -38,6 +34,7 @@ SFMNav::SFMNav(ros::NodeHandle *n, SecurityMargin *margin_, tf2_ros::Buffer *tfB
     nh = n;
     //Pointer to the security margin object created
     margin = margin_;
+    margin->setParams(n);
     tfBuffer = tfBuffer_;
 
     //Right now we will put the ARCO cmd vel topic but in the future it will selectable
@@ -47,11 +44,19 @@ SFMNav::SFMNav(ros::NodeHandle *n, SecurityMargin *margin_, tf2_ros::Buffer *tfB
     goal_pub = nh->advertise<PoseStamp>("/move_base_simple/goal", 1);
     leds_pub = nh->advertise<std_msgs::UInt8MultiArray>("/idmind_sensors/set_leds", 1);
 
+
+    rot_recovery_status_pub = nh->advertise<std_msgs::Bool>("/nav_node/rot_recovery_status",1);
+    approach_man_pub =nh->advertise<std_msgs::Bool>("/trajectory_tracker/aproach_manoeuvre",1);
     //Advertise SFM related markers
     robot_markers_pub = nh->advertise<visualization_msgs::MarkerArray>("/sfm/markers/robot_forces", 1);
 
+    stop_planning_srv_client = nh->serviceClient<std_srvs::Trigger>("/local_planner_node/stop_planning_srv");
+    pause_planning_srv_client = nh->serviceClient<std_srvs::Trigger>("/local_planner_node/pause_planning_srv");
+    rotate_robot_srv = nh->advertiseService("/nav_node/rotate_server", &SFMNav::rotationSrvCb, this);
+
+    pause_nav_srv = nh->advertiseService("/nav_node/pause_navigation_srv", &SFMNav::pauseNavSrv, this);
+
     nh->param<bool>("do_navigate", do_navigate, true);
-    nh->param<bool>("holonomic", holonomic, true);
     nh->param<float>("angular_max_speed", angularMaxSpeed, 0.9);
     nh->param<float>("linear_max_speed", linearMaxSpeed, 0.6);
 
@@ -60,35 +65,29 @@ SFMNav::SFMNav(ros::NodeHandle *n, SecurityMargin *margin_, tf2_ros::Buffer *tfB
     //Margin for arriving at a goal
     nh->param<float>("dist_margin", distMargin, 0.35);
 
-    nh->param<float>("a", a, 5.0);
+    nh->param<float>("a", a, 2.0);
     nh->param<float>("b", b, 5.0);
     nh->param<float>("traj_timeout", traj_timeout, 0.025);
-    nh->param<float>("start_orientate_dist", startOrientateDist, 0.025);
     nh->param<std::string>("robot_base_frame", robot_frame, (string) "base_link");
     nh->param<std::string>("world_frame", world_frame, (string) "map");
 
-
     //SFM params
-    nh->param<double>("robot_radius",robot_radius,0.35);
-    nh->param<double>("person_radius",person_radius,0.35);
+    nh->param<double>("robot_radius", robot_radius, 0.35);
+    nh->param<double>("person_radius", person_radius, 0.35);
 
     //Mean velocity of people
-    nh->param<double>("target_velocity",target_velocity,0.6);
-    nh->param<double>("people_velocity",people_velocity,0.6);
-   
-  
+    nh->param<double>("target_velocity", target_velocity, 0.6);
+    nh->param<double>("people_velocity", people_velocity, 0.6);
 
-    nh->param<double>("obstacle_distance_threshold",obstacle_distance_threshold,2.5);	
-    nh->param<double>("naive_goal_time",naive_goal_time,2.0);
-   
+    nh->param<double>("obstacle_distance_threshold", obstacle_distance_threshold, 2.5);
+    nh->param<double>("naive_goal_time", naive_goal_time, 2.0);
 
-	//Initialize SFM. Just one agent (the robot)
-	agents.resize(1);
-	agents[0].desiredVelocity = linearMaxSpeed;
-	agents[0].radius = robot_radius;
-	agents[0].cyclicGoals = false;
-	agents[0].teleoperated = true;
-
+    //Initialize SFM. Just one agent (the robot)
+    agents.resize(1);
+    agents[0].desiredVelocity = linearMaxSpeed;
+    agents[0].radius = robot_radius;
+    agents[0].cyclicGoals = false;
+    agents[0].teleoperated = true;
 
     //Start flags values
     //Flags to publish
@@ -104,12 +103,56 @@ SFMNav::SFMNav(ros::NodeHandle *n, SecurityMargin *margin_, tf2_ros::Buffer *tfB
     alpha = 30;
 }
 
+bool SFMNav::pauseNavSrv(std_srvs::TriggerRequest &req, std_srvs::TriggerResponse &rep)
+{
 
+    if (do_navigate)
+    {
+        do_navigate = false;
+        publishZeroVelocity();
+    }
+    else
+    {
+        do_navigate = true;
+    }
+}
+bool SFMNav::rotationSrvCb(std_srvs::TriggerRequest &req, std_srvs::TriggerResponse &rep)
+{
 
+    bool suc = rotateToRefresh();
+    rot.data = true;
+    rot_recovery_status_pub.publish(rot);
+    if (suc)
+    {
+        rep.message = "Rotation done succesfully";
+    }
+    else
+    {
+        rep.message = "Not possible to do the rotation";
+    }
 
+    rep.success = suc;
+    return true;
+}
+bool SFMNav::rotateToRefresh()
+{
+    recoveryRotation = true;
+
+    PoseStamp bl_pose;
+
+    bl_pose.pose.position.x = 0;
+    bl_pose.pose.position.y = 0;
+
+    bl_pose.pose.orientation.w = 1;
+    bl_pose.pose.orientation.z = 0;
+
+    start_pose = transformPose(bl_pose, robot_frame, world_frame);
+
+    return true;
+}
 void SFMNav::occLocalGoalCb(const std_msgs::Bool::ConstPtr &msg)
 {
-	ROS_INFO("Local goal occupied received");
+    ROS_INFO("Local goal occupied received");
     localGoalOcc = *msg;
     if (localGoalOcc.data)
     {
@@ -117,155 +160,141 @@ void SFMNav::occLocalGoalCb(const std_msgs::Bool::ConstPtr &msg)
     }
 }
 
-
 void SFMNav::impossibleMoveCb(const std_msgs::Bool::ConstPtr &msg)
 {
     possible_to_move.data = !(msg->data);
 }
 
-
-void SFMNav::odomReceived(const nav_msgs::Odometry::ConstPtr& odom)
+void SFMNav::odomReceived(const nav_msgs::Odometry::ConstPtr &odom)
 {
-	ROS_INFO("Odom received");
+    ROS_INFO("Odom received");
 
-	if (odom->header.frame_id != "/odom" && odom->header.frame_id !="odom") {
-		ROS_INFO("Odometry frame is %s, it should be odom",odom->header.frame_id.c_str()); 
-		return;
-	}	
+    if (odom->header.frame_id != "/odom" && odom->header.frame_id != "odom")
+    {
+        ROS_INFO("Odometry frame is %s, it should be odom", odom->header.frame_id.c_str());
+        return;
+    }
 
-	//Update agent[0] (the robot) with odom. Our robot is omnidirectional
-	agents[0].position.set(odom->pose.pose.position.x,odom->pose.pose.position.y); 
-	agents[0].yaw = utils::Angle::fromRadian(tf::getYaw(odom->pose.pose.orientation));
-	
-	agents[0].linearVelocity = std::sqrt(odom->twist.twist.linear.x*odom->twist.twist.linear.x +odom->twist.twist.linear.y*odom->twist.twist.linear.y);
-	agents[0].angularVelocity = odom->twist.twist.angular.z;
-	
-	//The velocity in the odom messages is in the robot local frame!!!
-	geometry_msgs::Vector3 velocity;
-	velocity.x = odom->twist.twist.linear.x;
-	velocity.y = odom->twist.twist.linear.y;
+    //Update agent[0] (the robot) with odom. Our robot is omnidirectional
+    agents[0].position.set(odom->pose.pose.position.x, odom->pose.pose.position.y);
+    agents[0].yaw = utils::Angle::fromRadian(tf::getYaw(odom->pose.pose.orientation));
 
-	geometry_msgs::Vector3 localV = SFMNav::transformVector(velocity,robot_frame,"odom");
-	agents[0].velocity.set(localV.x, localV.y);
+    agents[0].linearVelocity = std::sqrt(odom->twist.twist.linear.x * odom->twist.twist.linear.x + odom->twist.twist.linear.y * odom->twist.twist.linear.y);
+    agents[0].angularVelocity = odom->twist.twist.angular.z;
 
-	//To test the approach from a bag file:
- 	//agents[0].velocity.set(0.0, 0.0);
-	
+    //The velocity in the odom messages is in the robot local frame!!!
+    geometry_msgs::Vector3 velocity;
+    velocity.x = odom->twist.twist.linear.x;
+    velocity.y = odom->twist.twist.linear.y;
 
+    geometry_msgs::Vector3 localV = SFMNav::transformVector(velocity, robot_frame, "odom");
+    agents[0].velocity.set(localV.x, localV.y);
 
+    //To test the approach from a bag file:
+    //agents[0].velocity.set(0.0, 0.0);
 }
 
-void SFMNav::poseReceived(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr& pose)
+void SFMNav::poseReceived(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr &pose)
 {
 
-	ROS_INFO("Pose received");
-	
-	//agents[0].position.set(pose->pose.pose.position.x,pose->pose.pose.position.y); 
-	//agents[0].yaw = utils::Angle::fromRadian(tf::getYaw(pose->pose.pose.orientation));
-	//agents[0].linearVelocity = std::sqrt(odom->twist.twist.linear.x*odom->twist.twist.linear.x +odom->twist.twist.linear.y*odom->twist.twist.linear.y);
-	//agents[0].angularVelocity = odom->twist.twist.angular.z;	
-	//agents[0].velocity.set(odom->twist.twist.linear.x, odom->twist.twist.linear.y);
-	
+    ROS_INFO("Pose received");
 
-
+    //agents[0].position.set(pose->pose.pose.position.x,pose->pose.pose.position.y);
+    //agents[0].yaw = utils::Angle::fromRadian(tf::getYaw(pose->pose.pose.orientation));
+    //agents[0].linearVelocity = std::sqrt(odom->twist.twist.linear.x*odom->twist.twist.linear.x +odom->twist.twist.linear.y*odom->twist.twist.linear.y);
+    //agents[0].angularVelocity = odom->twist.twist.angular.z;
+    //agents[0].velocity.set(odom->twist.twist.linear.x, odom->twist.twist.linear.y);
 }
-
-
 
 void SFMNav::trackedPersonCb(const people_msgs::People::ConstPtr &people)
 {
 
-	ROS_INFO("People received");
+    ROS_INFO("People received");
 
     peopl = *people;
 
+    //The SFM permits to define a person to accompany (the target)
+    //and groups (through groupId). They are not considered by now
+    target_index = 0;
+    targetFound = false;
+    agents[0].groupId = -1;
+    agents.resize(people->people.size() + 1);
 
-	
+    //People are received in the global frame. We transform them to odom
+    for (unsigned i = 0; i < people->people.size(); i++)
+    {
 
+        //People is assumed to be received in the global frame
+        geometry_msgs::Point point = SFMNav::transformPoint(people->people[i].position, world_frame, "odom");
 
-	//The SFM permits to define a person to accompany (the target)
-	//and groups (through groupId). They are not considered by now
-	target_index=0;
-	targetFound=false;
-	agents[0].groupId = -1;
-	agents.resize(people->people.size()+1);
+        agents[i + 1].position.set(point.x, point.y);
 
-	//People are received in the global frame. We transform them to odom
-	for (unsigned i=0; i< people->people.size(); i++) {
+        geometry_msgs::Vector3 velocity;
+        velocity.x = people->people[i].velocity.x;
+        velocity.y = people->people[i].velocity.y;
 
-		//People is assumed to be received in the global frame
-		geometry_msgs::Point point = SFMNav::transformPoint(people->people[i].position,world_frame,"odom");
+        geometry_msgs::Vector3 localV = SFMNav::transformVector(velocity, world_frame, "odom");
 
-		agents[i+1].position.set(point.x,point.y);
+        agents[i + 1].yaw = utils::Angle::fromRadian(atan2(localV.y, localV.x));
+        agents[i + 1].velocity.set(localV.x, localV.y);
+        agents[i + 1].linearVelocity = agents[i + 1].velocity.norm();
+        agents[i + 1].radius = person_radius;
+        agents[i + 1].teleoperated = false;
+        //if (fabs(people->people[i].vel) < 0.05) {
+        //	agents[i+1].velocity.set(0,0);
+        //}
 
-		geometry_msgs::Vector3 velocity;
-		velocity.x = people->people[i].velocity.x;
-		velocity.y = people->people[i].velocity.y;
-
-		geometry_msgs::Vector3 localV = SFMNav::transformVector(velocity,world_frame,"odom");
-
-		agents[i+1].yaw = utils::Angle::fromRadian(atan2(localV.y, localV.x));
-		agents[i+1].velocity.set(localV.x, localV.y);
-		agents[i+1].linearVelocity = agents[i+1].velocity.norm();
-		agents[i+1].radius = person_radius;
-		agents[i+1].teleoperated=false;
-		//if (fabs(people->people[i].vel) < 0.05) {
-		//	agents[i+1].velocity.set(0,0);
-		//} 
-
-		//The SFM requires a local goal for each agent. We will assume that the goal for people
-		//depends on its current velocity
-		agents[i+1].goals.clear();		
-		sfm::Goal naiveGoal;
-		naiveGoal.center =agents[i+1].position + naive_goal_time * agents[i+1].velocity;
-		naiveGoal.radius = distMargin;
-		agents[i+1].goals.push_back(naiveGoal);
-		if (false/*people->people[i].name == targetName*/) {
-			targetFound = true;
-			target_index=i+1;
-			agents[i+1].desiredVelocity = target_velocity;
-			agents[i+1].groupId = 0;
-			agents[0].groupId = 0;
-			targetPos = agents[i+1].position;
-			targetVel = agents[i+1].velocity;
-		} else {
-			agents[i+1].desiredVelocity = people_velocity;
-			agents[i+1].groupId = -1;
-		}
-	}
-  
+        //The SFM requires a local goal for each agent. We will assume that the goal for people
+        //depends on its current velocity
+        agents[i + 1].goals.clear();
+        sfm::Goal naiveGoal;
+        naiveGoal.center = agents[i + 1].position + naive_goal_time * agents[i + 1].velocity;
+        naiveGoal.radius = distMargin;
+        agents[i + 1].goals.push_back(naiveGoal);
+        if (false /*people->people[i].name == targetName*/)
+        {
+            targetFound = true;
+            target_index = i + 1;
+            agents[i + 1].desiredVelocity = target_velocity;
+            agents[i + 1].groupId = 0;
+            agents[0].groupId = 0;
+            targetPos = agents[i + 1].position;
+            targetVel = agents[i + 1].velocity;
+        }
+        else
+        {
+            agents[i + 1].desiredVelocity = people_velocity;
+            agents[i + 1].groupId = -1;
+        }
+    }
 }
-
 
 void SFMNav::trajectoryCb(const trajectory_msgs::MultiDOFJointTrajectory::ConstPtr &trj)
 {
-	ROS_INFO("Trajectory received");
+    ROS_INFO("Trajectory received");
     trajReceived = true;
     ros::param::get("/nav_node/traj_timeout", traj_timeout);
-
+    last_trj_stamp = trj->header.stamp;
     delta = ros::Time::now().toSec() - trj->header.stamp.toSec();
 
     //ROS_INFO("DELTA: %.3f\n now: %.3f",delta,ros::Time::now().toSec());
-
+    margin->setMode(0);
     nextPoint = trj->points[trj->points.size() > 1 ? 1 : 0];
 }
-
 
 //Used to calculate distance from base_link to global goal
 void SFMNav::globalGoalCb(const geometry_msgs::PoseStampedConstPtr &globGoal_)
 {
-	ROS_INFO("Global Goal received");
+    ROS_INFO("Global Goal received");
     goalReached.data = false;
     aproxComplete = false;
     globalGoal = *globGoal_;
 }
 
-
 void SFMNav::setRobotOrientation(geometry_msgs::Quaternion q, bool goal, bool pub, float speed, float angleMargin_)
 {
     SFMNav::setRobotOrientation(SFMNav::getYawFromQuat(q), goal, pub, speed, angleMargin_);
 }
-
 
 void SFMNav::setRobotOrientation(float finalYaw, bool goal, bool pub, float speed, float angleMargin_)
 {
@@ -311,8 +340,6 @@ void SFMNav::setRobotOrientation(float finalYaw, bool goal, bool pub, float spee
         SFMNav::publishCmdVel();
 }
 
-
-
 void SFMNav::aproximateTo(geometry_msgs::PoseStamped *pose, bool isGoal, bool isHome)
 {
 
@@ -325,13 +352,32 @@ void SFMNav::aproximateTo(geometry_msgs::PoseStamped *pose, bool isGoal, bool is
     SFMNav::publishCmdVel();
 }
 
-
-
-
-
 void SFMNav::navigate(double dt)
 {
     SFMNav::refreshParams();
+
+    if(recoveryRotation){
+        
+        Vx = 0;
+        Vy = 0;
+        Wz = angularMaxSpeed;
+
+        if(ros::Time::now() - start_pose.header.stamp > ros::Duration(2*M_PI / Wz) ){
+            recoveryRotation = false;
+            Wz = 0;
+        }
+        
+        publishCmdVel();
+
+    }
+    if( ros::Time::now() - last_trj_stamp > ros::Duration(0.5) ){
+        if(!timeout)
+            publishZeroVelocity();
+            
+        timeout = true;
+    }else{
+        timeout = false; 
+    }
 
     if (trajReceived && !goalReached.data && do_navigate && !localGoalOcc.data && possible_to_move.data)
     {
@@ -343,8 +389,8 @@ void SFMNav::navigate(double dt)
         Vy = 0;
         Wz = 0;
 
-	//Local goal for the SFM for the robot. We transform it to odom
-	PoseStamp nextGoalOdom = SFMNav::transformPose(nextPoint, world_frame, "odom");
+        //Local goal for the SFM for the robot. We transform it to odom
+        PoseStamp nextGoalOdom = SFMNav::transformPose(nextPoint, world_frame, "odom");
 
         PoseStamp nextPoseBlFrame = SFMNav::transformPose(nextPoint, world_frame, robot_frame);
         angle2NextPoint = atan2(nextPoseBlFrame.pose.position.y, nextPoseBlFrame.pose.position.x);
@@ -354,58 +400,63 @@ void SFMNav::navigate(double dt)
         dist2GlobalGoal = SFMNav::euclideanDistance(globalGoalPose);
         angle2GlobalGoal = SFMNav::getYawFromQuat(globalGoalPose.pose.orientation);
 
-	ROS_INFO("Navigate %f, %f", dist2GlobalGoal, distMargin);
+        ROS_INFO("Navigate %f, %f", dist2GlobalGoal, distMargin);
 
+        if (dist2GlobalGoal < 1 || ros::Time::now() - time_count < ros::Duration(2) )
+        {
+            margin->setMode(1);
+            std_msgs::Bool flg;
+            flg.data = true;
+            approach_man_pub.publish(flg);
+        }
         if (dist2GlobalGoal < distMargin && !goalReached.data)
         {
             ROS_INFO("Maniobra de aproximacion");
             SFMNav::aproximateTo(&globalGoal, 1, 0);
+            margin->setMode(1);
         }
         else
         {
-           	ROS_INFO("SFM:%f,%f ",nextGoalOdom.pose.position.x, nextGoalOdom.pose.position.y);
-		agents[0].goals.clear();
-		robot_local_goal.center.set(nextGoalOdom.pose.position.x,nextGoalOdom.pose.position.y);
+            ROS_INFO("SFM:%f,%f ", nextGoalOdom.pose.position.x, nextGoalOdom.pose.position.y);
+            agents[0].goals.clear();
+            robot_local_goal.center.set(nextGoalOdom.pose.position.x, nextGoalOdom.pose.position.y);
 
-		robot_local_goal.radius = distMargin;
-		agents[0].goals.push_back(robot_local_goal);
+            robot_local_goal.radius = distMargin;
+            agents[0].goals.push_back(robot_local_goal);
 
-		//Compute resultant forces for all agents
-		sfm::SFM.computeForces(agents);
-		
-		//Compute velocity of the robot (agent[0])
-		agents[0].velocity += agents[0].forces.globalForce * dt;
-		if (agents[0].velocity.norm() > agents[0].desiredVelocity) {
-			agents[0].velocity.normalize();
-			agents[0].velocity *= agents[0].desiredVelocity;
-		}
+            //Compute resultant forces for all agents
+            sfm::SFM.computeForces(agents);
 
-		//The resultant total velocity is expressed in the odom frame. Transform to base_link
-		geometry_msgs::Vector3 velocity;
-		velocity.x = agents[0].velocity.getX();
-		velocity.y = agents[0].velocity.getY();
-		geometry_msgs::Vector3 localV = SFMNav::transformVector(velocity,"odom", robot_frame);
+            //Compute velocity of the robot (agent[0])
+            agents[0].velocity += agents[0].forces.globalForce * dt;
+            if (agents[0].velocity.norm() > agents[0].desiredVelocity)
+            {
+                agents[0].velocity.normalize();
+                agents[0].velocity *= agents[0].desiredVelocity;
+            }
 
+            //The resultant total velocity is expressed in the odom frame. Transform to base_link
+            geometry_msgs::Vector3 velocity;
+            velocity.x = agents[0].velocity.getX();
+            velocity.y = agents[0].velocity.getY();
+            geometry_msgs::Vector3 localV = SFMNav::transformVector(velocity, "odom", robot_frame);
 
-		//Set velocity of robot. We also rotate the robot
-		//to move always facing "front". The idea is to align the velocity
-		//vector with the X direction in base_link in the next two seconds
-		Vx = localV.x;
-    		Vy = localV.y;
-    		//Wz = std::atan2(localV.y,localV.x)/2.0;
-		double angle = std::atan2(localV.y,localV.x);
-		Wz = SFMNav::getVel(angularMaxSpeed, a, angle);
+            //Set velocity of robot. We also rotate the robot
+            //to move always facing "front". The idea is to align the velocity
+            //vector with the X direction in base_link in the next two seconds
+            Vx = localV.x;
+            Vy = localV.y;
+            //Wz = std::atan2(localV.y,localV.x)/2.0;
+            double angle = std::atan2(localV.y, localV.x);
+            Wz = SFMNav::getVel(angularMaxSpeed, a, angle);
 
-		ROS_INFO("Vx: %f; Vy: %f, Wz: %f",Vx, Vy, Wz);
+            ROS_INFO("Vx: %f; Vy: %f, Wz: %f", Vx, Vy, Wz);
 
-		//Publish markers for debugging
-		publishForces();			
-			
-		
-       }
-       SFMNav::publishCmdVel();
+            //Publish markers for debugging
+            publishForces();
+        }
+        SFMNav::publishCmdVel();
     }
-   
 }
 
 /**
@@ -415,16 +466,14 @@ void SFMNav::navigate(double dt)
  *  
 **/
 float SFMNav::getVel(float max, float exp_const, float var)
-{ 
-    return max * (1 - exp(-exp_const * fabs(var))) * var / fabs(var); 
+{
+    return max * (1 - exp(-exp_const * fabs(var))) * var / fabs(var);
 }
-
 
 bool SFMNav::hasFinished()
 {
     return goalReached.data;
 }
-
 
 void SFMNav::publishZeroVelocity()
 {
@@ -442,18 +491,25 @@ void SFMNav::publishZeroVelocity()
     muving_state_pub.publish(muvingState);
 }
 
-
 void SFMNav::setGoalReachedFlag(bool status_)
 {
-    goalReached.data = false;
     if (status_)
     {
         goalReached.data = true;
         SFMNav::publishZeroVelocity();
-        goal_reached_pub.publish(goalReached);
-    }
-}
 
+        std_srvs::Trigger trg;
+        stop_planning_srv_client.call(trg);
+        std_msgs::Bool flg;
+        flg.data = false;
+        approach_man_pub.publish(flg);
+    }
+    else
+    {
+        goalReached.data = false;
+    }
+    goal_reached_pub.publish(goalReached);
+}
 
 void SFMNav::publishCmdVel()
 {
@@ -468,15 +524,29 @@ void SFMNav::publishCmdVel()
         vel.angular.z = Wz;
         vel.linear.x = Vx;
         vel.linear.y = Vy;
+
+        if (planingPaused)
+        {
+            ROS_INFO("Playing planning again");
+            std_srvs::Trigger trg;
+            //pause_planning_srv_client.call(trg);
+            planingPaused = false;
+        }
+
         twist_pub.publish(vel);
         muving_state_pub.publish(muvingState);
     }
     else
     {
-        SFMNav::publishZeroVelocity();
+        if (!planingPaused)
+        {
+            //std_srvs::Trigger trg;
+            SFMNav::publishZeroVelocity();
+            //pause_planning_srv_client.call(trg);
+        }
+        ROS_WARN("I cant move, pausing planing");
+        planingPaused = true;
     }
-   
-    //goal_reached_pub.publish(goalReached);
 }
 
 PoseStamp SFMNav::transformPose(trajectory_msgs::MultiDOFJointTrajectoryPoint point, std::string from, std::string to)
@@ -493,7 +563,6 @@ PoseStamp SFMNav::transformPose(trajectory_msgs::MultiDOFJointTrajectoryPoint po
     pose.pose.position.z = point.transforms[0].translation.z;
     return SFMNav::transformPose(pose, from, to);
 }
-
 
 PoseStamp SFMNav::transformPose(PoseStamp originalPose, std::string from, std::string to)
 {
@@ -528,14 +597,14 @@ geometry_msgs::Point SFMNav::transformPoint(geometry_msgs::Point point, std::str
     //we'll just use the most recent transform available for our simple example
     p.header.stamp = ros::Time(0);
 
-  	//just an arbitrary point in space
+    //just an arbitrary point in space
     p.point.x = point.x;
     p.point.y = point.y;
     p.point.z = 0.0;
 
     try
     {
-	tfBuffer->transform(p,np, to);
+        tfBuffer->transform(p, np, to);
     }
     catch (tf2::TransformException &ex)
     {
@@ -562,14 +631,14 @@ geometry_msgs::Vector3 SFMNav::transformVector(geometry_msgs::Vector3 vector, st
     //we'll just use the most recent transform available for our simple example
     v.header.stamp = ros::Time(0);
 
-  	//just an arbitrary point in space
+    //just an arbitrary point in space
     v.vector.x = vector.x;
     v.vector.y = vector.y;
     v.vector.z = 0.0;
 
     try
     {
-	tfBuffer->transform(v,nv, to);
+        tfBuffer->transform(v, nv, to);
     }
     catch (tf2::TransformException &ex)
     {
@@ -583,7 +652,6 @@ geometry_msgs::Vector3 SFMNav::transformVector(geometry_msgs::Vector3 vector, st
     return nextVector;
 }
 
-
 float SFMNav::getYawFromQuat(geometry_msgs::Quaternion quat)
 {
     double r, p, y;
@@ -594,79 +662,74 @@ float SFMNav::getYawFromQuat(geometry_msgs::Quaternion quat)
     return y / M_PI * 180;
 }
 
-
-
-
-
-void SFMNav::laserReceived(const sensor_msgs::LaserScan::ConstPtr& scan)
+void SFMNav::laserReceived(const sensor_msgs::LaserScan::ConstPtr &scan)
 {
-	ROS_INFO("Laser received");
-	
-	if (scan->header.frame_id != "/base_link" && scan->header.frame_id !="base_link") {
-		ROS_ERROR("Laser frame is %s, it should be base_link",scan->header.frame_id.c_str()); 
-		return;
-	}
+    ROS_INFO("Laser received");
 
-	utils::Angle alpha = agents[0].yaw + utils::Angle::fromRadian(scan->angle_min);
-	utils::Angle angle_inc = utils::Angle::fromRadian(scan->angle_increment);
+    if (scan->header.frame_id != "/base_link" && scan->header.frame_id != "base_link")
+    {
+        ROS_ERROR("Laser frame is %s, it should be base_link", scan->header.frame_id.c_str());
+        return;
+    }
 
-	agents[0].obstacles1.clear();
-	for (unsigned i=0; i<scan->ranges.size();i++) {
-		if (!std::isnan(scan->ranges[i]) && scan->ranges[i]<obstacle_distance_threshold && scan->ranges[i]>0.5) {
-			agents[0].obstacles1.emplace_back(scan->ranges[i]*alpha.cos(),scan->ranges[i]*alpha.sin());
-		}
-		alpha+=angle_inc;
-	}	
+    utils::Angle alpha = agents[0].yaw + utils::Angle::fromRadian(scan->angle_min);
+    utils::Angle angle_inc = utils::Angle::fromRadian(scan->angle_increment);
 
-
+    agents[0].obstacles1.clear();
+    for (unsigned i = 0; i < scan->ranges.size(); i++)
+    {
+        if (!std::isnan(scan->ranges[i]) && scan->ranges[i] < obstacle_distance_threshold && scan->ranges[i] > 0.5)
+        {
+            agents[0].obstacles1.emplace_back(scan->ranges[i] * alpha.cos(), scan->ranges[i] * alpha.sin());
+        }
+        alpha += angle_inc;
+    }
 }
 
-
-void SFMNav::publishForceMarker(unsigned index, const std_msgs::ColorRGBA& color, 
-					const utils::Vector2d& force, 
-					visualization_msgs::MarkerArray& markers) 
+void SFMNav::publishForceMarker(unsigned index, const std_msgs::ColorRGBA &color,
+                                const utils::Vector2d &force,
+                                visualization_msgs::MarkerArray &markers)
 {
-	visualization_msgs::Marker marker;
-	marker.header.frame_id = "odom";
-	marker.header.stamp = ros::Time::now();
-	marker.ns = "robot_forces";
-	marker.id = index;
-	marker.action = force.norm()>1e-4 ?0:2;
-	marker.color = color;
-	marker.lifetime = ros::Duration(1.0);
-	marker.scale.x = std::max(1e-4,force.norm());
-	marker.scale.y = 0.1;
-	marker.scale.z = 0.1;
-	marker.pose.position.x = agents[0].position.getX();
-	marker.pose.position.y = agents[0].position.getY();
-	marker.pose.position.z = 0;
-	marker.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0,0,force.angle().toRadian());
-	markers.markers.push_back(marker);
+    visualization_msgs::Marker marker;
+    marker.header.frame_id = "odom";
+    marker.header.stamp = ros::Time::now();
+    marker.ns = "robot_forces";
+    marker.id = index;
+    marker.action = force.norm() > 1e-4 ? 0 : 2;
+    marker.color = color;
+    marker.lifetime = ros::Duration(1.0);
+    marker.scale.x = std::max(1e-4, force.norm());
+    marker.scale.y = 0.1;
+    marker.scale.z = 0.1;
+    marker.pose.position.x = agents[0].position.getX();
+    marker.pose.position.y = agents[0].position.getY();
+    marker.pose.position.z = 0;
+    marker.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0, 0, force.angle().toRadian());
+    markers.markers.push_back(marker);
 }
 
 std_msgs::ColorRGBA SFMNav::getColor(double r, double g, double b, double a)
 {
-	std_msgs::ColorRGBA color;
-	color.r = r;
-	color.g = g;
-	color.b = b;
-	color.a = a;
-	return color;
+    std_msgs::ColorRGBA color;
+    color.r = r;
+    color.g = g;
+    color.b = b;
+    color.a = a;
+    return color;
 }
 
 void SFMNav::publishForces()
 {
-	visualization_msgs::MarkerArray markers;
-	publishForceMarker(0,getColor(0,0,1,1),agents[0].forces.obstacleForce,markers);
-	publishForceMarker(1,getColor(0,1,1,1),agents[0].forces.socialForce,markers);	
-	publishForceMarker(2,getColor(0,1,0,1),agents[0].forces.groupForce,markers);	
-	publishForceMarker(3,getColor(1,0,0,1),agents[0].forces.desiredForce,markers);	
-	publishForceMarker(4,getColor(1,1,1,1),agents[0].forces.globalForce,markers);	
-	publishForceMarker(5,getColor(1,1,0,1),agents[0].velocity,markers);	
-	robot_markers_pub.publish(markers);
+    visualization_msgs::MarkerArray markers;
+    publishForceMarker(0, getColor(0, 0, 1, 1), agents[0].forces.obstacleForce, markers);
+    publishForceMarker(1, getColor(0, 1, 1, 1), agents[0].forces.socialForce, markers);
+    publishForceMarker(2, getColor(0, 1, 0, 1), agents[0].forces.groupForce, markers);
+    publishForceMarker(3, getColor(1, 0, 0, 1), agents[0].forces.desiredForce, markers);
+    publishForceMarker(4, getColor(1, 1, 1, 1), agents[0].forces.globalForce, markers);
+    publishForceMarker(5, getColor(1, 1, 0, 1), agents[0].velocity, markers);
+    robot_markers_pub.publish(markers);
 
-
-	/*teresa_wsbs::Info forces;
+    /*teresa_wsbs::Info forces;
 	forces.header.frame_id = "/odom";
 	forces.header.stamp = ros::Time::now();
 	
@@ -723,6 +786,5 @@ void SFMNav::publishForces()
 	forces_pub.publish(forces);
 	*/
 }
-
 
 } // namespace Navigators

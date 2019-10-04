@@ -30,15 +30,12 @@
 
 #include <navigator/securityMargin.hpp>
 
-
 #include <lightsfm/sfm.hpp>
 
 using namespace std;
 
-
 namespace Navigators
 {
-
 
 typedef geometry_msgs::PoseStamped PoseStamp;
 typedef visualization_msgs::Marker RVizMarker;
@@ -46,7 +43,6 @@ typedef visualization_msgs::Marker RVizMarker;
 class SFMNav
 {
 public:
-
   /**
    * Default constructor:
    * @param *NodeHandle: Pointer to node handle use to publish to topics 
@@ -54,7 +50,7 @@ public:
    * @param *tfBuffer: Pointer to tf2 buffer 
   **/
   SFMNav(ros::NodeHandle *n, SecurityMargin *margin_, tf2_ros::Buffer *tfBuffer_);
-  
+
   /**
    * Make a aproximation manoeuvre smoothly
    * @param *pose: Pointer to pose in map frame to get to
@@ -69,7 +65,7 @@ public:
    * @param isHome: To use when goHomeLab works
   **/
   void navigate(double dt);
-  
+
   /**
    * Return the value of goalReached flag
    * @return goalReached.data
@@ -81,7 +77,6 @@ public:
    * @param status_: If true, it changes goalReached to true and also publish zero velocity
   **/
   void setGoalReachedFlag(bool status_);
-
 
   /**
    * Rotation in place functions. You can personalize what it does with the parameters
@@ -103,24 +98,24 @@ public:
   void impossibleMoveCb(const std_msgs::Bool::ConstPtr &msg);
   void occLocalGoalCb(const std_msgs::Bool::ConstPtr &msg);
 
+  void odomReceived(const nav_msgs::Odometry::ConstPtr &odom);
+  void poseReceived(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr &pose);
+  void laserReceived(const sensor_msgs::LaserScan::ConstPtr &laser);
 
-  void odomReceived(const nav_msgs::Odometry::ConstPtr& odom);
-  void poseReceived(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr& pose);
-  void laserReceived(const sensor_msgs::LaserScan::ConstPtr& laser);
+  void peopleReceived(const people_msgs::People::ConstPtr &people);
 
-	void peopleReceived(const people_msgs::People::ConstPtr &people);
-	
-	void publishForceMarker(unsigned index, const std_msgs::ColorRGBA& color, 
-					const utils::Vector2d& force, visualization_msgs::MarkerArray& markers);
+  void publishForceMarker(unsigned index, const std_msgs::ColorRGBA &color,
+                          const utils::Vector2d &force, visualization_msgs::MarkerArray &markers);
 
+  static std_msgs::ColorRGBA getColor(double r, double g, double b, double a);
 
+  void publishForces();
 
-	static std_msgs::ColorRGBA getColor(double r, double g, double b, double a);
+  bool rotationSrvCb(std_srvs::TriggerRequest &req, std_srvs::TriggerResponse &rep);
+  bool pauseNavSrv(std_srvs::TriggerRequest &req, std_srvs::TriggerResponse &rep);
 
-	void publishForces();
-	
 private:
-
+  bool rotateToRefresh();
   /**
    * Functions use to transform mainly between map and base_link frames
    * @param originalPose/point: The position we want to transform
@@ -132,7 +127,7 @@ private:
   PoseStamp transformPose(trajectory_msgs::MultiDOFJointTrajectoryPoint point, std::string from, std::string to);
   geometry_msgs::Point transformPoint(geometry_msgs::Point point, std::string from, std::string to);
   geometry_msgs::Vector3 transformVector(geometry_msgs::Vector3 vector, std::string from, std::string to);
-  
+
   /**
    * Functions to help to calculate distances
    * You can use pure coordinates, distance from two poses 
@@ -157,13 +152,13 @@ private:
   **/
   inline float d2rad(float angle)
   {
-    return angle/180*M_PI;
+    return angle / 180 * M_PI;
   }
-  inline float rad2d(float angle){
-    return angle/M_PI*180;
+  inline float rad2d(float angle)
+  {
+    return angle / M_PI * 180;
   }
 
-  
   /**
    * As its name says, it publishes the Vx,Vy and Wz
    * Also publishes to muving state topic as true if any of the velocity componentes are differents from zero
@@ -177,14 +172,12 @@ private:
   **/
   void publishZeroVelocity();
 
-  
   /**
    * Auxiliar function to get the yaw in degress from a quaternion
    * @param quat: quaternion to get the yaw from
   **/
   float getYawFromQuat(geometry_msgs::Quaternion quat);
 
- 
   /**
    * Refresh new dynamically reconfigure set params
    * 
@@ -199,97 +192,96 @@ private:
   **/
   float getVel(float max, float exp_const, float var);
 
-
-
   /**    Variables    **/
   string world_frame, robot_frame;
-  bool holonomic;//1 o 0(true or false)
-  bool finalOrientationOk, homePublished, trajReceived;//Control flags
+  bool holonomic;                                       //1 o 0(true or false)
+  bool finalOrientationOk, homePublished, trajReceived; //Control flags
   bool do_navigate;
-  double Vx, Vy, Wz;//Velocity variables
-  double dist2GlobalGoal, dist2NextPoint;//Distances variables 
+  double Vx, Vy, Wz;                      //Velocity variables
+  double dist2GlobalGoal, dist2NextPoint; //Distances variables
 
-  float angle2NextPoint, angle2GlobalGoal;//Angles variables
-  float angleMargin, distMargin;//Margins 
-  float angularMaxSpeed, linearMaxSpeed; //Top speeds 
+  float angle2NextPoint, angle2GlobalGoal; //Angles variables
+  float angleMargin, distMargin;           //Margins
+  float angularMaxSpeed, linearMaxSpeed;   //Top speeds
 
   //Custom speed testing parameters
-  float v,a,b,old_b;
+  float v, a, b, old_b;
 
   float startOrientateDist;
 
   ros::NodeHandle *nh; //Pointer to the node node handle
 
-  geometry_msgs::Twist vel; //The twist message that will be published
+  geometry_msgs::Twist vel;                              //The twist message that will be published
   geometry_msgs::PoseStamped globalGoal, globalGoalPose; //global goal in base_link and map frame.It would be nice to rename
 
-  SecurityMargin *margin;//Pointer to the security margin object used to evaluate if it can move
+  SecurityMargin *margin; //Pointer to the security margin object used to evaluate if it can move
 
-  tf2_ros::Buffer *tfBuffer;//Pointer to the tfBuffer created in the node
+  tf2_ros::Buffer *tfBuffer; //Pointer to the tfBuffer created in the node
 
-  std_msgs::Bool muvingState, goalReached, localGoalOcc; //Flags that will be published 
-  
-  
   //std_msgs::UInt8MultiArray red, green, blue, white; //Not used right know, maybe will be used to signalize the status of the robot with the leds
 
-  ros::Publisher twist_pub, muving_state_pub, goal_reached_pub, goal_pub, leds_pub; //Ros publishers 
-  
+  ros::Publisher twist_pub, muving_state_pub, goal_reached_pub, goal_pub, leds_pub, approach_man_pub, rot_recovery_status_pub; //Ros publishers
+  ros::ServiceClient stop_planning_srv_client, pause_planning_srv_client;
+  ros::ServiceServer rotate_robot_srv, pause_nav_srv;
+  ros::Time start;
+  ros::Duration d;
+
+  PoseStamp start_pose; //Used in recov rot
+
   people_msgs::People peopl;
 
-  std::vector<sfm::Agent> agents; // 0: robot, 1..: Others 
+  std::vector<sfm::Agent> agents; // 0: robot, 1..: Others
 
   utils::Vector2d currentGoal;
-	utils::Vector2d targetPos;
-	utils::Vector2d targetVel;
-	sfm::Goal robot_local_goal;
-	
-	
-	bool use_estimated_target;
-	bool clicked_goals;
-	
-	bool publish_target;
+  utils::Vector2d targetPos;
+  utils::Vector2d targetVel;
+  sfm::Goal robot_local_goal;
 
-	double robot_radius;
-	double person_radius;
-	bool heuristic_controller;
-	bool targetFound;
-	unsigned target_index;
-	
+  bool outOfTime;
+  bool recoveryRotation;
 
-	double obstacle_distance_threshold;
-	double naive_goal_time;
+  bool use_estimated_target;
+  bool clicked_goals;
 
-	double goal_radius;
-	double target_velocity;
-	double people_velocity;
-	double robot_velocity;
-	
-	
+  bool publish_target;
 
-		ros::Publisher robot_markers_pub;
+  double robot_radius;
+  double person_radius;
+  bool heuristic_controller;
+  bool targetFound;
+  unsigned target_index;
 
-	
+  double obstacle_distance_threshold;
+  double naive_goal_time;
 
+  double goal_radius;
+  double target_velocity;
+  double people_velocity;
+  double robot_velocity;
 
-	string targetName;
+  ros::Publisher robot_markers_pub;
 
-  std::map<string, pair<float, float>> dist2people; 
-  std::pair<string, pair<float,float>> closest;
+  string targetName;
+
+  std::map<string, pair<float, float>> dist2people;
+  std::pair<string, pair<float, float>> closest;
   float alpha;
 
   trajectory_msgs::MultiDOFJointTrajectoryPoint nextPoint; //next point of the trajetory received
- 
+
   float traj_timeout;
   float delta;
+  std_msgs::Bool muvingState, goalReached, localGoalOcc, possible_to_move, rot;
 
-  std_msgs::Bool possible_to_move;
-  ros::Time start;
-  ros::Duration d;
   float secs;
 
-  bool aproxComplete,tr0_catch;
-  geometry_msgs::TransformStamped tr0,tr1;
+  bool aproxComplete, tr0_catch;
+  geometry_msgs::TransformStamped tr0, tr1;
   geometry_msgs::Vector3 dlt;
+
+  bool timeout = false;
+  bool planingPaused = false;
+  ros::Time last_trj_stamp, time_count;
 };
 
 } /*  namespace Navigators  */
