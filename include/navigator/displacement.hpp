@@ -24,6 +24,7 @@
 #include <trajectory_msgs/MultiDOFJointTrajectory.h>
 #include <people_msgs/People.h>
 #include <navigator/securityMargin.hpp>
+#include <std_srvs/Empty.h>
 
 using namespace std;
 

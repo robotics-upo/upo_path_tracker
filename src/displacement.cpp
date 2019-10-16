@@ -68,6 +68,7 @@ Displacement::Displacement(ros::NodeHandle *n, tf2_ros::Buffer *tfBuffer_)
     approach_man_pub =nh->advertise<std_msgs::Bool>("/trajectory_tracker/aproach_manoeuvre",1);
     stop_planning_srv_client = nh->serviceClient<std_srvs::Trigger>("/local_planner_node/stop_planning_srv");
     pause_planning_srv_client = nh->serviceClient<std_srvs::Trigger>("/local_planner_node/pause_planning_srv");
+    arrived_to_goal_srv_client = nh->serviceClient<std_srvs::Empty>("/local_planner_node/arrived_to_goal");
     rotate_robot_srv = nh->advertiseService("/nav_node/rotate_server", &Displacement::rotationSrvCb, this);
     
     rot_recovery_status_pub = nh->advertise<std_msgs::Bool>("/nav_node/rot_recovery_status",1);
@@ -450,6 +451,8 @@ void Displacement::setGoalReachedFlag(bool status_)
         std_msgs::Bool flg;
         flg.data = false;
         approach_man_pub.publish(flg);
+        std_srvs::Empty arr;
+        arrived_to_goal_srv_client.call(arr);
     }
     else
     {
