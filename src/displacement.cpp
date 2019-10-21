@@ -353,7 +353,7 @@ void Displacement::moveHolon(double finalYaw)
 }
 void Displacement::moveNonHolon()
 {
-    if (fabs(angle2NextPoint) > d2rad(angleMargin))
+    if (fabs(angle2NextPoint) > d2rad(40))
     {
         Wz = getVel(angularMaxSpeed, a, angle2NextPoint);
     }
@@ -361,7 +361,7 @@ void Displacement::moveNonHolon()
     {
         Vx = getVel(linearMaxSpeed, b, dist2GlobalGoal);
         Vy = 0;
-        Wz = getVel(angularMaxSpeed, a / 2, angle2NextPoint);
+        Wz = getVel(angularMaxSpeed, a, angle2NextPoint);
     }
 }
 
