@@ -66,6 +66,7 @@ Displacement::Displacement(ros::NodeHandle *n, tf2_ros::Buffer *tfBuffer_)
     dist2goal.data = 0;
 
     approach_man_pub =nh->advertise<std_msgs::Bool>("/trajectory_tracker/aproach_manoeuvre",1);
+
     stop_planning_srv_client = nh->serviceClient<std_srvs::Trigger>("/local_planner_node/stop_planning_srv");
     pause_planning_srv_client = nh->serviceClient<std_srvs::Trigger>("/local_planner_node/pause_planning_srv");
     arrived_to_goal_srv_client = nh->serviceClient<std_srvs::Empty>("/local_planner_node/arrived_to_goal");
@@ -75,6 +76,16 @@ Displacement::Displacement(ros::NodeHandle *n, tf2_ros::Buffer *tfBuffer_)
 
 	pause_nav_srv = nh->advertiseService("/nav_node/pause_navigation_srv", &Displacement::pauseNavSrv, this);
 	
+    navigate_server_ptr.reset(new NavigateServer(*nh, "Navigation", false));
+    navigate_server_ptr->registerGoalCallback(boost::bind(&Displacement::navGoalCb, this));
+    navigate_server_ptr->registerPreemptCallback(boost::bind(&Displacement::navPreemptCb, this));
+    navigate_server_ptr->start();
+    
+    rot_server_ptr.reset(new RotationInPlaceServer(*nh, "Rotation", false));
+    rot_server_ptr->registerGoalCallback(boost::bind(&Displacement::rotGoalCb,this));
+    rot_server_ptr->registerPreemptCallback(boost::bind(&Displacement::rotPreemptCb,this));
+    rot_server_ptr->start();
+
     nh->param("/nav_node/do_navigate", do_navigate, (bool)true);
     nh->param("/nav_node/holonomic", holonomic, (bool)true);
     nh->param("/nav_node/angular_max_speed", angularMaxSpeed, (float)0.5);
@@ -148,9 +159,26 @@ Displacement::Displacement(ros::NodeHandle *n, tf2_ros::Buffer *tfBuffer_)
     rot_speed.pose.orientation.z = quat.getZ();
     rot_speed.pose.orientation.w = quat.getW();
 }
+void Displacement::rotGoalCb(){
+
+    bool suc = rotateToRefresh();
+
+    //This flag topic was used by the leds node
+    rot.data = true;
+    rot_recovery_status_pub.publish(rot);
+
+}
+void Displacement::rotPreemptCb(){
+    recoveryRotation = false;
+}
+void Displacement::navGoalCb(){
+
+}
+void Displacement::navPreemptCb(){
+
+}
 bool Displacement::pauseNavSrv(std_srvs::TriggerRequest &req, std_srvs::TriggerResponse &rep){
 	
-
 	if(do_navigate){
         do_navigate = false;
          publishZeroVelocity();
@@ -163,8 +191,9 @@ bool Displacement::rotationSrvCb(std_srvs::TriggerRequest &req, std_srvs::Trigge
 {
 
     bool suc = rotateToRefresh();
-    rot.data  =true;
+    rot.data = true;
     rot_recovery_status_pub.publish(rot);
+
     if (suc)
     {
         rep.message = "Rotation done succesfully";
@@ -339,7 +368,20 @@ void Displacement::moveNonHolon()
 void Displacement::navigate()
 {
     refreshParams();
-
+      if(navigate_server_ptr->isNewGoalAvailable()){
+        navigate_goal = navigate_server_ptr->acceptNewGoal();
+        globalGoal.pose = navigate_goal->global_goal;
+    }
+   
+     //Security timeout
+    if( ros::Time::now() - last_trj_stamp > ros::Duration(1) ){
+        if(!timeout)
+            publishZeroVelocity();
+            
+        timeout = true;
+    }else{
+        timeout = false; 
+    }
     if(recoveryRotation){
         
         Vx = 0;
@@ -353,16 +395,7 @@ void Displacement::navigate()
         
         publishCmdVel();
 
-    }
-    if( ros::Time::now() - last_trj_stamp > ros::Duration(0.5) ){
-        if(!timeout)
-            publishZeroVelocity();
-            
-        timeout = true;
-    }else{
-        timeout = false; 
-    }
-    if ( trajReceived && !goalReached.data && do_navigate && !localGoalOcc.data && possible_to_move.data && !recoveryRotation && !timeout)
+    }else if (navigate_server_ptr->isActive() && trajReceived)//&& !goalReached.data &&  && !localGoalOcc.data && possible_to_move.data )
     {
         if(rot.data){
             rot.data  =false;
@@ -443,16 +476,28 @@ void Displacement::setGoalReachedFlag(bool status_)
 {
     if (status_)
     {
+        navigate_result.arrived = true;
+        
+        //TODO Fill these fields correctly
+        //navigate_result.finalAngle.data = ;
+        //navigate_result.finalDist.data = ;
+        navigate_server_ptr->setSucceeded(navigate_result);
+
         goalReached.data = true;
         publishZeroVelocity();
         ROS_WARN("llEGUE");
-        std_srvs::Trigger trg;
-        stop_planning_srv_client.call(trg);
+
+        //std_srvs::Trigger trg;
+        //stop_planning_srv_client.call(trg);
+        
+        //std_srvs::Empty arr;
+        //arrived_to_goal_srv_client.call(arr);
+
+        //This topic was used by the leds node to know the status of the mission
         std_msgs::Bool flg;
         flg.data = false;
         approach_man_pub.publish(flg);
-        std_srvs::Empty arr;
-        arrived_to_goal_srv_client.call(arr);
+        
     }
     else
     {
@@ -468,7 +513,7 @@ void Displacement::publishCmdVel()
     if (Vx == 0 && Vy == 0 && Wz == 0)
         movingState.data = false;
 
-    if (margin.canIMove())
+    if (margin.canIMove() && do_navigate && !timeout)
     {
         if(planingPaused){
             ROS_INFO("Playing planning again");
@@ -477,7 +522,7 @@ void Displacement::publishCmdVel()
             planingPaused = false;
             
         }
-        ROS_INFO("i CAN MOVE AGAIN");
+        ROS_INFO_THROTTLE(0.5,"Sending cmd vels: Vx,Vy,Wz:\t[%.2f, %.2f]", Vx, Wz);
         vel.angular.z = Wz;
         vel.linear.x = Vx;
         vel.linear.y = Vy;
