@@ -17,9 +17,9 @@ find_package(catkin REQUIRED COMPONENTS
 generate_dynamic_reconfigure_options(
   cfg/nav.cfg
 )
-generate_messages(
-  DEPENDENCIES
-)
+#generate_messages(
+#  DEPENDENCIES
+#)
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES displacement
