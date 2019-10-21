@@ -26,6 +26,11 @@
 #include <navigator/securityMargin.hpp>
 #include <std_srvs/Empty.h>
 
+#include <upo_actions/NavigateAction.h>
+#include <upo_actions/RotationInPlaceAction.h>
+
+#include <actionlib/server/simple_action_server.h>
+
 using namespace std;
 
 
@@ -35,7 +40,8 @@ namespace Navigators
 
 typedef geometry_msgs::PoseStamped PoseStamp;
 typedef visualization_msgs::Marker RVizMarker;
-
+typedef actionlib::SimpleActionServer<upo_actions::NavigateAction> NavigateServer;
+typedef actionlib::SimpleActionServer<upo_actions::RotationInPlaceAction> RotationInPlaceServer;
 class Displacement
 {
 public:
@@ -192,6 +198,10 @@ private:
   **/
   float getVel(float max, float exp_const, float var);
 
+  void navGoalCb();
+  void navPreemptCb();
+  void rotGoalCb();
+  void rotPreemptCb();
 
 
   /**    Variables    **/
@@ -252,6 +262,13 @@ private:
   bool timeout = false;
   bool planingPaused = false;
   ros::Time last_trj_stamp, time_count;
+
+  std::unique_ptr<NavigateServer> navigate_server_ptr;
+  std::unique_ptr<RotationInPlaceServer> rot_server_ptr;
+
+  upo_actions::NavigateResult navigate_result;
+  upo_actions::RotationInPlaceResult rot_result;
+  upo_actions::NavigateGoalConstPtr navigate_goal;
 };
 
 } /*  namespace Navigators  */
