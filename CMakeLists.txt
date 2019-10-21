@@ -11,16 +11,19 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   tf2_ros
   tf2_geometry_msgs
-)
+
 
 generate_dynamic_reconfigure_options(
   cfg/nav.cfg
+)
+generate_messages(
+  DEPENDENCIES
 )
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES displacement
   LIBRARIES securityMargin
-  CATKIN_DEPENDS roscpp
+  CATKIN_DEPENDS roscpp 
 )
 ###########
 ## Build ##
@@ -29,6 +32,7 @@ catkin_package(
 include_directories(
   ${PROJECT_SOURCE_DIR}/include
   ${catkin_INCLUDE_DIRS}
+
 )
 
 
@@ -42,9 +46,9 @@ include_directories(
 add_executable(nav_node src/nav_node.cpp)
 add_library(security_margin src/securityMargin.cpp)
 add_library(displacement src/displacement.cpp)
-target_link_libraries(nav_node ${catkin_LIBRARIES} displacement security_margin)
+target_link_libraries(nav_node ${catkin_LIBRARIES} displacement security_margin )
 add_dependencies(nav_node ${PROJECT_NAME}_gencfg)
-add_dependencies(nav_node ${catkin_EXPORTED_TARGETS})
+add_dependencies(nav_node ${catkin_EXPORTED_TARGETS}  )
 
 
 add_executable(sfm_nav_node src/nav_node_sfm.cpp src/securityMargin.cpp src/sfmcontroller.cpp)
