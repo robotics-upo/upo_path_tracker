@@ -81,7 +81,7 @@ Displacement::Displacement(ros::NodeHandle *n, tf2_ros::Buffer *tfBuffer_)
     navigate_server_ptr->registerPreemptCallback(boost::bind(&Displacement::navPreemptCb, this));
     navigate_server_ptr->start();
     
-    rot_server_ptr.reset(new RotationInPlaceServer(*nh, "Rotation", false));
+    rot_server_ptr.reset(new RotationInPlaceServer(*nh, "Recovery_Rotation", false));
     rot_server_ptr->registerGoalCallback(boost::bind(&Displacement::rotGoalCb,this));
     rot_server_ptr->registerPreemptCallback(boost::bind(&Displacement::rotPreemptCb,this));
     rot_server_ptr->start();
