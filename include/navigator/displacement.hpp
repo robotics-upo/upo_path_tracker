@@ -231,9 +231,6 @@ private:
   float v,a,b,old_b;
   float startOrientateDist;
   float alpha;
-  float traj_timeout;
-  float delta;
-  float secs;
 
   visualization_msgs::Marker speed,rot_speed;
 
@@ -254,7 +251,7 @@ private:
   PoseStamp start_pose; //Used in recov rot
   tf2_ros::Buffer *tfBuffer;//Pointer to the tfBuffer created in the node
 
-  std_msgs::Bool movingState, goalReached, localGoalOcc,possible_to_move,rot; //Flags that will be published 
+  std_msgs::Bool movingState, goalReached,rot; //Flags that will be published 
   std_msgs::Float32 dist2goal;
 
   people_msgs::People peopl;
@@ -264,16 +261,19 @@ private:
   SecurityMargin margin;
   
   bool timeout = false;
-  bool planingPaused = false;
+  bool navigationPaused = false;
   ros::Time last_trj_stamp, time_count;
 
   std::unique_ptr<NavigateServer> navigate_server_ptr;
   std::unique_ptr<RotationInPlaceServer> rot_server_ptr;
 
   upo_actions::NavigateResult navigate_result;
+  upo_actions::NavigateActionFeedback navigate_fb;
+  upo_actions::NavigateGoalConstPtr navigate_goal;
   upo_actions::RotationInPlaceResult rot_result;
   upo_actions::RotationInPlaceGoalConstPtr rot_inplace;
-  upo_actions::NavigateGoalConstPtr navigate_goal;
+  upo_actions::RotationInPlaceActionFeedback rotation_fb;
+  
 };
 
 } /*  namespace Navigators  */

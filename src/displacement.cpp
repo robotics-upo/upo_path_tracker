@@ -18,21 +18,8 @@ void Displacement::refreshParams()
     ros::param::get("/nav_node/dist_margin", distMargin);
     ros::param::get("/nav_node/a", a);
     ros::param::get("/nav_node/b", b);
-    //ros::param::get("/nav_node/traj_timeout", traj_timeout);
     ros::param::get("/nav_node/start_orientate_dist", startOrientateDist);
 
-    if (delta > traj_timeout)
-    {
-        if (!outOfTime)
-        {
-            outOfTime = true;
-            publishZeroVelocity();
-        }
-    }
-    else
-    {
-        outOfTime = false;
-    }
     //The idea is to save the smallest distance to anyone and change the value of b according to this distance
     closest.second.first = std::numeric_limits<float>::max();
 
@@ -68,7 +55,7 @@ Displacement::Displacement(ros::NodeHandle *n, tf2_ros::Buffer *tfBuffer_)
     tfBuffer = tfBuffer_;
 
     //? Detect if possible to rotate in place
-    scanRGot = false, scanLGot = false, backwards=false;
+    scanRGot = false, scanLGot = false, backwards = false;
     laser1_sub = nh->subscribe<sensor_msgs::LaserScan>("/scanLeft", 1, &Displacement::laser1Callback, this);
     laser2_sub = nh->subscribe<sensor_msgs::LaserScan>("/scanRight", 1, &Displacement::laser2Callback, this);
     //?
@@ -80,7 +67,6 @@ Displacement::Displacement(ros::NodeHandle *n, tf2_ros::Buffer *tfBuffer_)
     dist2goal.data = 0;
 
     approach_man_pub = nh->advertise<std_msgs::Bool>("/trajectory_tracker/aproach_manoeuvre", 1);
-
     rot_recovery_status_pub = nh->advertise<std_msgs::Bool>("/nav_node/rot_recovery_status", 1);
 
     navigate_server_ptr.reset(new NavigateServer(*nh, "Navigation", false));
@@ -93,7 +79,7 @@ Displacement::Displacement(ros::NodeHandle *n, tf2_ros::Buffer *tfBuffer_)
     rot_server_ptr->registerPreemptCallback(boost::bind(&Displacement::rotPreemptCb, this));
     rot_server_ptr->start();
 
-    nh->param("/nav_node/debug", debug, (bool) true);
+    nh->param("/nav_node/debug", debug, (bool)true);
     nh->param("/nav_node/do_navigate", do_navigate, (bool)true);
     nh->param("/nav_node/holonomic", holonomic, (bool)true);
     nh->param("/nav_node/angular_max_speed", angularMaxSpeed, (float)0.5);
@@ -102,19 +88,18 @@ Displacement::Displacement(ros::NodeHandle *n, tf2_ros::Buffer *tfBuffer_)
     nh->param("/nav_node/dist_margin", distMargin, (float)0.35);
     nh->param("/nav_node/a", a, (float)5);
     nh->param("/nav_node/b", b, (float)5);
-    nh->param("/nav_node/traj_timeout", traj_timeout, (float)0.025);
     nh->param("/nav_node/start_orientate_dist", startOrientateDist, (float)0.5);
     nh->param("/nav_node/robot_base_frame", robot_frame, (string) "base_link");
     nh->param("/nav_node/world_frame", world_frame, (string) "map");
     old_b = b;
 
+    rotation_fb.header.frame_id = world_frame;
+    navigate_fb.header.frame_id = world_frame;
     //Start flags values
     //Flags to publish
-    possible_to_move.data = true;
 
     rot.data = false;
     goalReached.data = false;
-    outOfTime = false;
     recoveryRotation = false;
 
     //Flags for internal states
@@ -185,7 +170,7 @@ void Displacement::navPreemptCb()
 }
 bool Displacement::validateRotInPlace()
 {
-    if(debug) 
+    if (debug)
         return false;
 
     scanRGot = false;
@@ -245,9 +230,6 @@ void Displacement::trajectoryCb(const trajectory_msgs::MultiDOFJointTrajectory::
         trajReceived = true;
         last_trj_stamp = trj->header.stamp;
 
-        //do_navigate = true;
-
-        delta = ros::Time::now().toSec() - trj->header.stamp.toSec();
         margin.setMode(0);
     }
 }
@@ -292,7 +274,6 @@ void Displacement::setRobotOrientation(float finalYaw, bool goal, bool pub, floa
     {
         ROS_WARN("hEY");
         setGoalReachedFlag(1);
-        traj_timeout = std::numeric_limits<float>::max();
     }
 
     if (pub)
@@ -346,30 +327,31 @@ void Displacement::moveNonHolon()
     //TODO Change 40 value
     if (fabs(angle2NextPoint) > d2rad(40)) //Rot in place
     {
-        if(backwards && ros::Time::now() - timeout_backwards > ros::Duration(20)){
-            if(validateRotInPlace()){
-                backwards=false;
-                Wz = getVel(angularMaxSpeed, a, angle2NextPoint);    
+        if (backwards && ros::Time::now() - timeout_backwards > ros::Duration(20))
+        {
+            if (validateRotInPlace())
+            {
+                backwards = false;
+                Wz = getVel(angularMaxSpeed, a, angle2NextPoint);
             }
         }
-        
 
         if (validateRotInPlace() && !backwards)
         {
             Wz = getVel(angularMaxSpeed, a, angle2NextPoint);
         }
-        else 
+        else
         { //!MARCHA ATRAS
-            if(!backwards)
+            if (!backwards)
                 timeout_backwards = ros::Time::now();
 
-            Vx = -1*getVel(linearMaxSpeed, b, dist2GlobalGoal);
+            Vx = -1 * getVel(linearMaxSpeed, b, dist2GlobalGoal);
             Vy = 0;
-            Wz = -1*getVel(angularMaxSpeed, a, angle2NextPoint);
-            backwards=true;
+            Wz = -1 * getVel(angularMaxSpeed, a, angle2NextPoint);
+            backwards = true;
         }
     }
-    else if(!backwards)
+    else if (!backwards)
     {
         Vx = getVel(linearMaxSpeed, b, dist2GlobalGoal);
         Vy = 0;
@@ -416,9 +398,14 @@ void Displacement::navigate()
             Wz = 0;
         }
 
+        rotation_fb.header.seq++;
+        rotation_fb.header.stamp = ros::Time::now();
+        rotation_fb.feedback.angular_distance.data = (ros::Time::now() - start_pose.header.stamp).toSec() * Wz;
+        rotation_fb.status.text = "Executing rotation in place";
+        rot_server_ptr->publishFeedback(rotation_fb.feedback);
         publishCmdVel();
     }
-    else if (navigate_server_ptr->isActive() && trajReceived) //&& !goalReached.data &&  && !localGoalOcc.data && possible_to_move.data )
+    else if (navigate_server_ptr->isActive() && trajReceived)
     {
         if (rot.data)
         {
@@ -502,9 +489,10 @@ void Displacement::setGoalReachedFlag(bool status_)
         navigate_result.arrived = true;
 
         //TODO Fill these fields correctly
-        //navigate_result.finalAngle.data = ;
-        //navigate_result.finalDist.data = ;
-        navigate_server_ptr->setSucceeded(navigate_result, "Goal reached set to TRUE");
+        navigate_result.finalAngle.data = angle2GlobalGoal;
+        navigate_result.finalDist.data = dist2GlobalGoal;
+        navigate_server_ptr->setSucceeded(navigate_result, "Goal reached succesfully");
+
         trajReceived = false;
         goalReached.data = true;
         publishZeroVelocity();
@@ -527,14 +515,23 @@ void Displacement::publishCmdVel()
     if (Vx == 0 && Vy == 0 && Wz == 0)
         movingState.data = false;
 
-    if (margin.canIMove() && do_navigate && !timeout)
+    if (margin.canIMove() && !timeout)
     {
-        if (planingPaused)
+        if (navigationPaused)
         {
             ROS_INFO("Playing planning again");
-            planingPaused = false;
+            navigationPaused = false;
         }
+
+        navigate_fb.header.stamp = ros::Time::now();
+        navigate_fb.header.seq++;
+        navigate_fb.feedback.distance_to_goal.data = dist2GlobalGoal;
+        navigate_fb.feedback.speed.x = Vx;
+        navigate_fb.feedback.speed.y = Vy;
+        navigate_fb.feedback.speed.z = Wz;
+        navigate_fb.feedback.security_stop = false;
         ROS_INFO_THROTTLE(0.5, "Sending cmd vels: Vx,Vy,Wz:\t[%.2f, %.2f]", Vx, Wz);
+
         vel.angular.z = Wz;
         vel.linear.x = Vx;
         vel.linear.y = Vy;
@@ -554,13 +551,21 @@ void Displacement::publishCmdVel()
     }
     else
     {
-        if (!planingPaused)
+        navigate_fb.feedback.distance_to_goal.data = dist2GlobalGoal;
+        navigate_fb.feedback.speed.x = 0;
+        navigate_fb.feedback.speed.y = 0;
+        navigate_fb.feedback.speed.z = 0;
+        navigate_fb.feedback.security_stop = true;
+        navigate_fb.status.text="Security Stop...";
+
+        if (!navigationPaused)
         {
             publishZeroVelocity();
         }
-        ROS_WARN("I cant move, pausing planing");
-        planingPaused = true;
+        ROS_WARN("I cant move, pausing navigation");
+        navigationPaused = true;
     }
+    navigate_server_ptr->publishFeedback(navigate_fb.feedback);
 }
 
 PoseStamp Displacement::transformPose(trajectory_msgs::MultiDOFJointTrajectoryPoint point, std::string from, std::string to)
