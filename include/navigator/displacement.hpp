@@ -25,7 +25,7 @@
 #include <people_msgs/People.h>
 #include <navigator/securityMargin.hpp>
 #include <std_srvs/Empty.h>
-
+#include <sensor_msgs/LaserScan.h>
 #include <upo_actions/NavigateAction.h>
 #include <upo_actions/RotationInPlaceAction.h>
 
@@ -101,6 +101,10 @@ public:
 
 private:
 
+  void laser1Callback(const sensor_msgs::LaserScanConstPtr &scan);
+  void laser2Callback(const sensor_msgs::LaserScanConstPtr &scan);
+  bool validateRotInPlace();
+  
   bool rotateToRefresh();
   /**
    * Functions use to transform mainly between map and base_link frames
@@ -198,6 +202,13 @@ private:
   void rotPreemptCb();
 
 
+  //?
+  sensor_msgs::LaserScanConstPtr scanL,scanR;
+  bool scanRGot,scanLGot;
+  bool backwards;
+  ros::Time timeout_backwards;
+  bool debug;
+  //?
   /**    Variables    **/
   string world_frame, robot_frame;
 
@@ -233,7 +244,7 @@ private:
   ros::NodeHandle *nh; //Pointer to the node node handle
 
   ros::Publisher twist_pub, moving_state_pub,dist2goal_pub, speed_marker_pub,approach_man_pub, rot_recovery_status_pub; //Ros publishers 
-
+  ros::Subscriber laser1_sub, laser2_sub;
   ros::Time start;
   ros::Duration d;
 

@@ -48,6 +48,16 @@ void Displacement::refreshParams()
         b = old_b * closest.second.first / 1.5;
     }
 }
+void Displacement::laser1Callback(const sensor_msgs::LaserScanConstPtr &scan)
+{
+    scanL = scan;
+    scanRGot = true;
+}
+void Displacement::laser2Callback(const sensor_msgs::LaserScanConstPtr &scan)
+{
+    scanR = scan;
+    scanRGot = true;
+}
 //Displacement Class functions
 Displacement::Displacement(ros::NodeHandle *n, tf2_ros::Buffer *tfBuffer_)
 {
@@ -57,6 +67,11 @@ Displacement::Displacement(ros::NodeHandle *n, tf2_ros::Buffer *tfBuffer_)
 
     tfBuffer = tfBuffer_;
 
+    //? Detect if possible to rotate in place
+    scanRGot = false, scanLGot = false, backwards=false;
+    laser1_sub = nh->subscribe<sensor_msgs::LaserScan>("/scanLeft", 1, &Displacement::laser1Callback, this);
+    laser2_sub = nh->subscribe<sensor_msgs::LaserScan>("/scanRight", 1, &Displacement::laser2Callback, this);
+    //?
     //Right now we will put the ARCO cmd vel topic but in the future it will selectable
     twist_pub = nh->advertise<geometry_msgs::Twist>("/idmind_motors/twist", 1);
     moving_state_pub = nh->advertise<std_msgs::Bool>("/trajectory_tracker/muving_state", 1);
@@ -78,6 +93,7 @@ Displacement::Displacement(ros::NodeHandle *n, tf2_ros::Buffer *tfBuffer_)
     rot_server_ptr->registerPreemptCallback(boost::bind(&Displacement::rotPreemptCb, this));
     rot_server_ptr->start();
 
+    nh->param("/nav_node/debug", debug, (bool) true);
     nh->param("/nav_node/do_navigate", do_navigate, (bool)true);
     nh->param("/nav_node/holonomic", holonomic, (bool)true);
     nh->param("/nav_node/angular_max_speed", angularMaxSpeed, (float)0.5);
@@ -167,7 +183,38 @@ void Displacement::navGoalCb()
 void Displacement::navPreemptCb()
 {
 }
+bool Displacement::validateRotInPlace()
+{
+    if(debug) 
+        return false;
 
+    scanRGot = false;
+    scanLGot = false;
+    while (!scanRGot && !scanLGot)
+    {
+        ros::spinOnce();
+    }
+    //Okey, now you have the two latests scans
+    int cnt1 = 0, cnt2 = 0;
+    for (auto it = scanR->ranges.cbegin(); it != scanR->ranges.cend(); ++it)
+    {
+        if (*it < 0.5)
+            ++cnt1;
+    }
+    for (auto it = scanL->ranges.cbegin(); it != scanL->ranges.cend(); ++it)
+    {
+        if (*it < 0.5)
+            ++cnt2;
+    }
+    if (cnt1 > 5 || cnt2 > 5)
+    {
+        return false;
+    }
+    else
+    {
+        return true;
+    }
+}
 bool Displacement::rotateToRefresh()
 {
     recoveryRotation = true;
@@ -296,11 +343,33 @@ void Displacement::moveHolon(double finalYaw)
 }
 void Displacement::moveNonHolon()
 {
-    if (fabs(angle2NextPoint) > d2rad(40))
+    //TODO Change 40 value
+    if (fabs(angle2NextPoint) > d2rad(40)) //Rot in place
     {
-        Wz = getVel(angularMaxSpeed, a, angle2NextPoint);
+        if(backwards && ros::Time::now() - timeout_backwards > ros::Duration(20)){
+            if(validateRotInPlace()){
+                backwards=false;
+                Wz = getVel(angularMaxSpeed, a, angle2NextPoint);    
+            }
+        }
+        
+
+        if (validateRotInPlace() && !backwards)
+        {
+            Wz = getVel(angularMaxSpeed, a, angle2NextPoint);
+        }
+        else 
+        { //!MARCHA ATRAS
+            if(!backwards)
+                timeout_backwards = ros::Time::now();
+
+            Vx = -1*getVel(linearMaxSpeed, b, dist2GlobalGoal);
+            Vy = 0;
+            Wz = -1*getVel(angularMaxSpeed, a, angle2NextPoint);
+            backwards=true;
+        }
     }
-    else
+    else if(!backwards)
     {
         Vx = getVel(linearMaxSpeed, b, dist2GlobalGoal);
         Vy = 0;
