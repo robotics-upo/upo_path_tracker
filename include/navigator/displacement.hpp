@@ -98,13 +98,7 @@ public:
   **/
   void trackedPersonCb(const people_msgs::People::ConstPtr &pl);
   void trajectoryCb(const trajectory_msgs::MultiDOFJointTrajectory::ConstPtr &trj);
-  void globalGoalCb(const geometry_msgs::PoseStampedConstPtr &globGoal_);
-  void impossibleMoveCb(const std_msgs::Bool::ConstPtr &msg);
-  void occLocalGoalCb(const std_msgs::Bool::ConstPtr &msg);
 
-  bool rotationSrvCb(std_srvs::TriggerRequest &req, std_srvs::TriggerResponse &rep);
-  bool pauseNavSrv(std_srvs::TriggerRequest &req, std_srvs::TriggerResponse &rep);
-  
 private:
 
   bool rotateToRefresh();
@@ -238,9 +232,8 @@ private:
   
   ros::NodeHandle *nh; //Pointer to the node node handle
 
-  ros::Publisher twist_pub, moving_state_pub, goal_reached_pub, goal_pub,dist2goal_pub, speed_marker_pub,approach_man_pub, rot_recovery_status_pub; //Ros publishers 
-  ros::ServiceClient stop_planning_srv_client,pause_planning_srv_client, arrived_to_goal_srv_client;
-  ros::ServiceServer rotate_robot_srv,pause_nav_srv;
+  ros::Publisher twist_pub, moving_state_pub,dist2goal_pub, speed_marker_pub,approach_man_pub, rot_recovery_status_pub; //Ros publishers 
+
   ros::Time start;
   ros::Duration d;
 

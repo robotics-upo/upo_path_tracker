@@ -167,19 +167,7 @@ void Displacement::navGoalCb()
 void Displacement::navPreemptCb()
 {
 }
-bool Displacement::pauseNavSrv(std_srvs::TriggerRequest &req, std_srvs::TriggerResponse &rep)
-{
 
-    if (do_navigate)
-    {
-        do_navigate = false;
-        publishZeroVelocity();
-    }
-    else
-    {
-        do_navigate = true;
-    }
-}
 bool Displacement::rotateToRefresh()
 {
     recoveryRotation = true;
