@@ -5,7 +5,8 @@ SecurityMargin::SecurityMargin(ros::NodeHandle *n)
 {
     setParams(n);
 }
-SecurityMargin::SecurityMargin(){
+SecurityMargin::SecurityMargin()
+{
     paramsConfigured = false;
 }
 
@@ -20,21 +21,25 @@ void SecurityMargin::laser1Callback(const sensor_msgs::LaserScanConstPtr &scan) 
         buildElliptic();
     }
 }
-void SecurityMargin::setMode(int mode){
-    if(mode){
-        status=4;
-    }else{
-        status=0;
+void SecurityMargin::setMode(int mode)
+{
+    if (mode)
+    {
+        status = 4;
+    }
+    else
+    {
+        status = 0;
     }
 }
 bool SecurityMargin::switchCtrlSrvCb(std_srvs::TriggerRequest &req, std_srvs::TriggerResponse &rep)
 {
 
-    if (status==4)
+    if (status == 4)
     {
         setMode(0);
         rep.message = "Mode changed to autonomous";
-        rep.success = true;   
+        rep.success = true;
     }
     else
     {
@@ -55,15 +60,15 @@ void SecurityMargin::setParams(ros::NodeHandle *n)
 
     nh->param("nav_node/robot_base_frame", base_link_frame, (string) "base_link");
     nh->param("nav_node/full_laser_topic", topicPath, (string) "/scanMulti");
-    
+
     laser1_sub = nh->subscribe<sensor_msgs::LaserScan>(topicPath.c_str(), 1, &SecurityMargin::laser1Callback, this);
-    
+
     nh->param("nav_node/f", f, (float)1);
     nh->param("nav_node/inner_radius", innerSecDistFront, (float)0.3);
     nh->param("nav_node/outer_radius", extSecDistFront, (float)0.45);
-    
+
     enableManualSrv = nh->advertiseService("/switch_control_mode", &SecurityMargin::switchCtrlSrvCb, this);
-    stopMotorsSrv =  nh->serviceClient<std_srvs::Trigger>("/security_stop_srv");
+    stopMotorsSrv = nh->serviceClient<std_srvs::Trigger>("/security_stop_srv");
 
     ROS_INFO("Robot base frame: %s", base_link_frame.c_str());
     ROS_INFO("F factor: %.2f", f);
@@ -173,7 +178,7 @@ void SecurityMargin::publishRvizMarkers()
         markerExtFr.color = red;
         //ROS_INFO(PRINTF_YELLOW "3");
         break;
-    case 4: 
+    case 4:
         markerIntFr.color = blue;
         markerExtFr.color = blue;
         //ROS_INFO(PRINTF_BLUE"4");
@@ -199,21 +204,20 @@ void SecurityMargin::publishRvizMarkers()
 bool SecurityMargin::checkObstacles()
 {
     bool ret;
-    cnt = cnt2 = 0;//Todo lo relacionado con esto es para evitar fantasmas y reflexiones de los laseres
+    cnt = cnt2 = 0; //Todo lo relacionado con esto es para evitar fantasmas y reflexiones de los laseres
     /*
     * Si entra algo en el radio menor, esperar hasta que salga del mayor para volver a mover <- Esta es la idea principal
     * 
      */
     for (auto i = 0; i < laserMsgLen; i++, cnt2++)
     {
-
-        if (laserCPtr->ranges.at(i) < secArrayFr.at(i) && laserCPtr->ranges.at(i) > 0.2 ) //laserCPtr->range_min)
+        if (laserCPtr->ranges.at(i) < secArrayFr.at(i) && laserCPtr->ranges.at(i) > 0.2) //laserCPtr->range_min)
         {
             //Algo hay dentro del margen interior
             if (cnt > 20)
             { //forma basta de quitar fantasmas
                 //Si llega a 10 significa que si debe haber algo de verda
-                if ((status == 3 || status == 2)) 
+                if ((status == 3 || status == 2))
                     status = 1;
 
                 ret = true;
@@ -241,14 +245,14 @@ bool SecurityMargin::checkObstacles()
     cnt = cnt2 = 0;
 
     bool extObst = false;
-// 0: All alright
-// 1: algo dentro del margen interno
-// 2: habia algo en el interno y ahora ha salido al externo
-// 3: hay algo en el margen externo pero no ha entrado en el interno
+    // 0: All alright
+    // 1: algo dentro del margen interno
+    // 2: habia algo en el interno y ahora ha salido al externo
+    // 3: hay algo en el margen externo pero no ha entrado en el interno
 
-//! Cuando algo entre la sucesion temporal de estados debe ser
-//? 0->3->1->2->0
-//!Si solo se tienen en cuenta los obstaculos que entran desde fuera tal vez se puedan evitar las reflexiones y fantasmas de los laseres
+    //! Cuando algo entre la sucesion temporal de estados debe ser
+    //? 0->3->1->2->0
+    //!Si solo se tienen en cuenta los obstaculos que entran desde fuera tal vez se puedan evitar las reflexiones y fantasmas de los laseres
 
     for (auto i = 0; i < laserMsgLen; i++, cnt2++)
     { //Ahora si se ha llegao hasta aqui significa que no ha habido ningun obstaculo
@@ -270,7 +274,6 @@ bool SecurityMargin::checkObstacles()
                     ret = false;
                     ROS_WARN("Status set to 3 from 0");
                     return ret;
-                    
                 }
                 extObst = true;
             }
@@ -281,14 +284,14 @@ bool SecurityMargin::checkObstacles()
         }
         if (cnt2 > 300 && cnt < 20)
             cnt = cnt2 = 0;
-        
     }
 
-    if (status == 3){
+    if (status == 3)
+    {
         status = 0;
         ROS_WARN("STATUS RESET TO 0");
     }
-    
+
     publishRvizMarkers();
     return false;
 }
@@ -299,7 +302,7 @@ bool SecurityMargin::canIMove()
 {
     //refreshParams();
     bool ret = true;
-    if (status==4)//Manual mode, ignoring security margin
+    if (status == 4) //Manual mode, ignoring security margin
     {
         publishRvizMarkers();
         return ret;
@@ -311,17 +314,18 @@ bool SecurityMargin::canIMove()
         return ret;
     }
 
-    if (checkObstacles()){
+    if (checkObstacles())
+    {
         ret = false;
         std_srvs::Trigger trg;
         stopMotorsSrv.call(trg);
     }
-    
-    if(stop_msg.data != !ret){
+
+    if (stop_msg.data != !ret)
+    {
         stop_msg.data = !ret;
         stop_pub.publish(stop_msg);
     }
-    
 
     return ret;
 }

@@ -70,25 +70,12 @@ public:
 
 private:
   
-  //void buildSelected();
-  /**
-   * This function build the four security margins arrays and also 
-   * the marker of each one if pub markers is set to true
-   * @param ext: If you want to build the inner or the outer margin
-  **/
-  //void buildArraysSquare2(bool ext);
   /**
    * Used at the demo and other experiments
    * 
    * 
   **/
   void buildElliptic();
-  /**
-   * Old array builder for the old platform
-   * 
-   * 
-  **/
-  //void buildArrays();
   /**
    * If only front is set to true, it only publishes the front security margin markers 
   **/
@@ -100,8 +87,6 @@ private:
    * @return: true if something inside the selected area
   **/
   bool checkObstacles();
-
-
 
   /**     Variables      **/
   
