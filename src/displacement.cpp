@@ -310,6 +310,10 @@ void Displacement::moveNonHolon()
 void Displacement::navigate()
 {
     refreshParams();
+    if (rot_server_ptr->isNewGoalAvailable())
+    {
+        rot_inplace = rot_server_ptr->acceptNewGoal();
+    }
     if (navigate_server_ptr->isNewGoalAvailable())
     {
         navigate_goal = navigate_server_ptr->acceptNewGoal();
@@ -445,7 +449,6 @@ void Displacement::setGoalReachedFlag(bool status_)
     {
         goalReached.data = false;
     }
-    
 }
 void Displacement::publishCmdVel()
 {

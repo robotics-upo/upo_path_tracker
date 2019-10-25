@@ -261,6 +261,7 @@ private:
 
   upo_actions::NavigateResult navigate_result;
   upo_actions::RotationInPlaceResult rot_result;
+  upo_actions::RotationInPlaceGoalConstPtr rot_inplace;
   upo_actions::NavigateGoalConstPtr navigate_goal;
 };
 
