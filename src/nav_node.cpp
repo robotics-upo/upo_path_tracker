@@ -20,7 +20,7 @@ int main(int argc, char **argv)
 
     Navigators::Displacement despl(&n, &tfBuffer);
     //Displacement class subscribers
-    ros::Subscriber path_sub = n.subscribe("/trajectory_tracker/local_input_trajectory", 1, &Navigators::Displacement::trajectoryCb, &despl);
+    ros::Subscriber path_sub = n.subscribe("/local_planner_node/local_path", 1, &Navigators::Displacement::trajectoryCb, &despl);
     ros::Subscriber people = n.subscribe("/people", 1, &Navigators::Displacement::trackedPersonCb, &despl);
 
     ros::Rate loop_rate(20);
