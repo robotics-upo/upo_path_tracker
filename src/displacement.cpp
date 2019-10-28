@@ -170,8 +170,7 @@ void Displacement::navPreemptCb()
 }
 bool Displacement::validateRotInPlace()
 {
-    if (debug)
-        return false;
+    bool ret = true;
 
     scanRGot = false;
     scanLGot = false;
@@ -191,14 +190,11 @@ bool Displacement::validateRotInPlace()
         if (*it < 0.5)
             ++cnt2;
     }
+
     if (cnt1 > 5 || cnt2 > 5)
-    {
-        return false;
-    }
-    else
-    {
-        return true;
-    }
+        ret = false;
+    
+    return ret;
 }
 bool Displacement::rotateToRefresh()
 {
@@ -325,37 +321,54 @@ void Displacement::moveHolon(double finalYaw)
 void Displacement::moveNonHolon()
 {
     //TODO Change 40 value
-    if (fabs(angle2NextPoint) > d2rad(40)) //Rot in place
+    if (debug)
     {
-        if (backwards && ros::Time::now() - timeout_backwards > ros::Duration(20))
+
+        if (fabs(angle2NextPoint) > d2rad(40)) //Rot in place
         {
-            if (validateRotInPlace())
+            if (backwards && ros::Time::now() - timeout_backwards > ros::Duration(20))
             {
-                backwards = false;
+                if (validateRotInPlace())
+                {
+                    backwards = false;
+                    Wz = getVel(angularMaxSpeed, a, angle2NextPoint);
+                }
+            }
+
+            if (validateRotInPlace() && !backwards)
+            {
                 Wz = getVel(angularMaxSpeed, a, angle2NextPoint);
             }
-        }
+            else
+            { //!MARCHA ATRAS
+                if (!backwards)
+                    timeout_backwards = ros::Time::now();
 
-        if (validateRotInPlace() && !backwards)
+                Vx = -1 * getVel(linearMaxSpeed, b, dist2GlobalGoal);
+                Vy = 0;
+                Wz = -1 * getVel(angularMaxSpeed, a, angle2NextPoint);
+                backwards = true;
+            }
+        }
+        else if (!backwards)
+        {
+            Vx = getVel(linearMaxSpeed, b, dist2GlobalGoal);
+            Vy = 0;
+            Wz = getVel(angularMaxSpeed, a, angle2NextPoint);
+        }
+    }
+    else
+    {
+        if (fabs(angle2NextPoint) > d2rad(40)) //Rot in place
         {
             Wz = getVel(angularMaxSpeed, a, angle2NextPoint);
         }
-        else
-        { //!MARCHA ATRAS
-            if (!backwards)
-                timeout_backwards = ros::Time::now();
-
-            Vx = -1 * getVel(linearMaxSpeed, b, dist2GlobalGoal);
+        else if (!backwards)
+        {
+            Vx = getVel(linearMaxSpeed, b, dist2GlobalGoal);
             Vy = 0;
-            Wz = -1 * getVel(angularMaxSpeed, a, angle2NextPoint);
-            backwards = true;
+            Wz = getVel(angularMaxSpeed, a, angle2NextPoint);
         }
-    }
-    else if (!backwards)
-    {
-        Vx = getVel(linearMaxSpeed, b, dist2GlobalGoal);
-        Vy = 0;
-        Wz = getVel(angularMaxSpeed, a, angle2NextPoint);
     }
 }
 void Displacement::navigate()
@@ -556,7 +569,7 @@ void Displacement::publishCmdVel()
         navigate_fb.feedback.speed.y = 0;
         navigate_fb.feedback.speed.z = 0;
         navigate_fb.feedback.security_stop = true;
-        navigate_fb.status.text="Security Stop...";
+        navigate_fb.status.text = "Security Stop...";
 
         if (!navigationPaused)
         {
