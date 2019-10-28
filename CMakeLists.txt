@@ -46,13 +46,12 @@ include_directories(
 
 add_executable(nav_node src/nav_node.cpp)
 add_library(security_margin src/securityMargin.cpp)
-add_library(displacement src/displacement.cpp)
+add_library(displacement src/displacement.cpp )
+add_dependencies(displacement ${catkin_EXPORTED_TARGETS} ${${PROJECT_NAME}_EXPORTED_TARGETS})
 target_link_libraries(nav_node ${catkin_LIBRARIES} displacement security_margin )
-add_dependencies(nav_node ${PROJECT_NAME}_gencfg)
-add_dependencies(nav_node ${catkin_EXPORTED_TARGETS}  ${${PROJECT_NAME}_EXPORTED_TARGETS} )
+add_dependencies(nav_node ${PROJECT_NAME}_gencfg  ${catkin_EXPORTED_TARGETS}  ${${PROJECT_NAME}_EXPORTED_TARGETS})
 
 add_executable(sfm_nav_node src/nav_node_sfm.cpp src/securityMargin.cpp src/sfmcontroller.cpp)
 target_link_libraries(sfm_nav_node ${catkin_LIBRARIES})
-add_dependencies(sfm_nav_node ${PROJECT_NAME}_gencfg)
-add_dependencies(sfm_nav_node ${catkin_EXPORTED_TARGETS}  ${${PROJECT_NAME}_EXPORTED_TARGETS})
+add_dependencies(sfm_nav_node ${PROJECT_NAME}_gencfg ${catkin_EXPORTED_TARGETS}  ${${PROJECT_NAME}_EXPORTED_TARGETS})
 
