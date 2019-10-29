@@ -101,6 +101,7 @@ public:
 
 private:
 
+  bool activateBackwardSrv(std_srvs::TriggerRequest &req, std_srvs::TriggerResponse &rep);
   void laser1Callback(const sensor_msgs::LaserScanConstPtr &scan);
   void laser2Callback(const sensor_msgs::LaserScanConstPtr &scan);
   bool validateRotInPlace();
@@ -242,6 +243,7 @@ private:
 
   ros::Publisher twist_pub, moving_state_pub,dist2goal_pub, speed_marker_pub,approach_man_pub, rot_recovery_status_pub; //Ros publishers 
   ros::Subscriber laser1_sub, laser2_sub;
+  ros::ServiceServer backwardsServer;
   ros::Time start;
   ros::Duration d;
 
@@ -273,6 +275,8 @@ private:
   upo_actions::RotationInPlaceResult rot_result;
   upo_actions::RotationInPlaceGoalConstPtr rot_inplace;
   upo_actions::RotationInPlaceActionFeedback rotation_fb;
+  
+
   
 };
 

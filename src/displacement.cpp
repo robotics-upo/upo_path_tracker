@@ -7,7 +7,19 @@
 
 namespace Navigators
 {
+bool Displacement::activateBackwardSrv(std_srvs::TriggerRequest &req, std_srvs::TriggerResponse &rep)
+{
+    if (debug)
+    {
+        debug = false;
+    }
+    else
+    {
+        debug = true;
+    }
 
+    return true;
+}
 void Displacement::refreshParams()
 {
     ros::param::get("/nav_node/holonomic", holonomic);
@@ -78,6 +90,8 @@ Displacement::Displacement(ros::NodeHandle *n, tf2_ros::Buffer *tfBuffer_)
     rot_server_ptr->registerGoalCallback(boost::bind(&Displacement::rotGoalCb, this));
     rot_server_ptr->registerPreemptCallback(boost::bind(&Displacement::rotPreemptCb, this));
     rot_server_ptr->start();
+
+    backwardsServer = nh->advertiseService("backwards_on", &Displacement::activateBackwardSrv, this);
 
     nh->param("/nav_node/debug", debug, (bool)true);
     nh->param("/nav_node/do_navigate", do_navigate, (bool)true);
@@ -191,9 +205,9 @@ bool Displacement::validateRotInPlace()
             ++cnt2;
     }
 
-    if (cnt1 > 5 || cnt2 > 5)
-        ret = false;
-    
+    //!if (cnt1 > 5 || cnt2 > 5)
+    //!    ret = false;
+
     return ret;
 }
 bool Displacement::rotateToRefresh()
@@ -324,7 +338,7 @@ void Displacement::moveNonHolon()
     if (debug)
     {
 
-        if (fabs(angle2NextPoint) > d2rad(40)) //Rot in place
+        if (fabs(angle2NextPoint) > d2rad(15)) //Rot in place
         {
             if (backwards && ros::Time::now() - timeout_backwards > ros::Duration(20))
             {
@@ -359,7 +373,7 @@ void Displacement::moveNonHolon()
     }
     else
     {
-        if (fabs(angle2NextPoint) > d2rad(40)) //Rot in place
+        if (fabs(angle2NextPoint) > d2rad(15)) //Rot in place
         {
             Wz = getVel(angularMaxSpeed, a, angle2NextPoint);
         }
