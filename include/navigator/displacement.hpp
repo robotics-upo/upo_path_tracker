@@ -31,12 +31,13 @@
 
 #include <actionlib/server/simple_action_server.h>
 
-using namespace std;
+#include <dynamic_reconfigure/server.h>
+#include <arco_path_tracker/navConfig.h>
 
+using namespace std;
 
 namespace Navigators
 {
-
 
 typedef geometry_msgs::PoseStamped PoseStamp;
 typedef visualization_msgs::Marker RVizMarker;
@@ -45,15 +46,14 @@ typedef actionlib::SimpleActionServer<upo_actions::RotationInPlaceAction> Rotati
 class Displacement
 {
 public:
-
   /**
    * Default constructor:
    * @param *NodeHandle: Pointer to node handle use to publish to topics 
    * @param *margin: Pointer to SecurityMargin object 
    * @param *tfBuffer: Pointer to tf2 buffer 
   **/
-  Displacement(ros::NodeHandle *n, tf2_ros::Buffer *tfBuffer_);
-  
+  Displacement(tf2_ros::Buffer *tfBuffer_);
+
   /**
    * Make a aproximation manoeuvre smoothly
    * @param *pose: Pointer to pose in map frame to get to
@@ -68,7 +68,7 @@ public:
    * @param isHome: To use when goHomeLab works
   **/
   void navigate();
-  
+
   /**
    * Return the value of goalReached flag
    * @return goalReached.data
@@ -80,7 +80,6 @@ public:
    * @param status_: If true, it changes goalReached to true and also publish zero velocity
   **/
   void setGoalReachedFlag(bool status_);
-
 
   /**
    * Rotation in place functions. You can personalize what it does with the parameters
@@ -96,16 +95,14 @@ public:
   /**
    * Callbacks to get the needed info 
   **/
-  void trackedPersonCb(const people_msgs::People::ConstPtr &pl);
   void trajectoryCb(const trajectory_msgs::MultiDOFJointTrajectory::ConstPtr &trj);
+  void dynReconfCb(arco_path_tracker::navConfig &config, uint32_t level);
 
 private:
-
   bool activateBackwardSrv(std_srvs::TriggerRequest &req, std_srvs::TriggerResponse &rep);
   void laser1Callback(const sensor_msgs::LaserScanConstPtr &scan);
   void laser2Callback(const sensor_msgs::LaserScanConstPtr &scan);
   bool validateRotInPlace();
-  
   bool rotateToRefresh();
   /**
    * Functions use to transform mainly between map and base_link frames
@@ -116,7 +113,7 @@ private:
   **/
   PoseStamp transformPose(PoseStamp originalPose, std::string from, std::string to);
   PoseStamp transformPose(trajectory_msgs::MultiDOFJointTrajectoryPoint point, std::string from, std::string to);
-  
+
   /**
    * Functions to help to calculate distances
    * You can use pure coordinates, distance from two poses 
@@ -141,17 +138,12 @@ private:
   **/
   inline float d2rad(float angle)
   {
-    return angle/180*M_PI;
+    return angle / 180 * M_PI;
   }
-  inline float rad2d(float angle){
-    return angle/M_PI*180;
+  inline float rad2d(float angle)
+  {
+    return angle / M_PI * 180;
   }
-
-  void printPeople();
-  void computeDistanceToPeople();
-
-  bool someoneInFront();
-  bool someoneInFront(float vx, float vy);
   /**
    * As its name says, it publishes the Vx,Vy and Wz
    * Also publishes to muving state topic as true if any of the velocity componentes are differents from zero
@@ -170,24 +162,16 @@ private:
    * @param finalYaw: If you want to force a final yaw
   **/
   void moveHolon(double finalYaw);
-  void moveHolonTest(double finalYaw);
   /**
    * No-Holonomic displacement function, called by the navigate function
   **/
   void moveNonHolon();
-  void moveNonHolonTest();
   /**
    * Auxiliar function to get the yaw in degress from a quaternion
    * @param quat: quaternion to get the yaw from
   **/
   float getYawFromQuat(geometry_msgs::Quaternion quat);
 
- 
-  /**
-   * Refresh new dynamically reconfigure set params
-   * 
-  **/
-  void refreshParams();
   /**
    * Exponential speed calculator
    * @max: speed at inf
@@ -195,17 +179,19 @@ private:
    * @var: the variable to be function of
    * v=max*(1-exp(-exp_cons*var))
   **/
-  float getVel(float max, float exp_const, float var);
+  inline float getVel(float max, float exp_const, float var)
+  {
+    return max * (1 - exp(-exp_const * fabs(var))) * var / fabs(var);
+  }
 
   void navGoalCb();
   void navPreemptCb();
   void rotGoalCb();
   void rotPreemptCb();
 
-
   //?
-  sensor_msgs::LaserScanConstPtr scanL,scanR;
-  bool scanRGot,scanLGot;
+  sensor_msgs::LaserScanConstPtr scanL, scanR;
+  bool scanRGot, scanLGot;
   bool backwards;
   ros::Time timeout_backwards;
   bool debug;
@@ -213,47 +199,41 @@ private:
   /**    Variables    **/
   string world_frame, robot_frame;
 
-  bool holonomic;//1 o 0(true or false)
-  bool trajReceived;//Control flags
+  bool holonomic;    //1 o 0(true or false)
+  bool trajReceived; //Control flags
   bool do_navigate;
   bool outOfTime;
   bool recoveryRotation;
-  
-  float rec_rot,rot_start;
 
+  float rec_rot, rot_start;
 
-  float Vx, Vy, Wz;//Velocity variables
-  float dist2GlobalGoal, dist2NextPoint;//Distances variables 
-  float angle2NextPoint, angle2GlobalGoal;//Angles variables
-  float angleMargin, distMargin;//Margins 
-  float angularMaxSpeed, linearMaxSpeed; //Top speeds 
+  float Vx, Vy, Wz;                        //Velocity variables
+  float dist2GlobalGoal, dist2NextPoint;   //Distances variables
+  float angle2NextPoint, angle2GlobalGoal; //Angles variables
+  float angleMargin, distMargin;           //Margins
+  float angularMaxSpeed, linearMaxSpeed;   //Top speeds
 
   //Custom speed testing parameters
-  float v,a,b,old_b;
+  float v, a, b;
   float startOrientateDist;
-  float alpha;
 
-  visualization_msgs::Marker speed,rot_speed;
+  visualization_msgs::Marker speed, rot_speed;
 
+  ros::NodeHandlePtr nh; //Pointer to the node node handle
 
-  std::map<string, pair<float, float>> dist2people; 
-  std::pair<string, pair<float,float>> closest;
-  
-  ros::NodeHandle *nh; //Pointer to the node node handle
-
-  ros::Publisher twist_pub, moving_state_pub,dist2goal_pub, speed_marker_pub,approach_man_pub, rot_recovery_status_pub; //Ros publishers 
+  ros::Publisher twist_pub, moving_state_pub, dist2goal_pub, speed_marker_pub, approach_man_pub, rot_recovery_status_pub; //Ros publishers
   ros::Subscriber laser1_sub, laser2_sub;
   ros::ServiceServer backwardsServer;
   ros::Time start;
   ros::Duration d;
 
-  geometry_msgs::Twist vel; //The twist message that will be published
+  geometry_msgs::Twist vel;                              //The twist message that will be published
   geometry_msgs::PoseStamped globalGoal, globalGoalPose; //global goal in base_link and map frame.It would be nice to rename
 
-  PoseStamp start_pose; //Used in recov rot
-  tf2_ros::Buffer *tfBuffer;//Pointer to the tfBuffer created in the node
+  PoseStamp start_pose;      //Used in recov rot
+  tf2_ros::Buffer *tfBuffer; //Pointer to the tfBuffer created in the node
 
-  std_msgs::Bool movingState, goalReached,rot; //Flags that will be published 
+  std_msgs::Bool movingState, goalReached, rot; //Flags that will be published
   std_msgs::Float32 dist2goal;
 
   people_msgs::People peopl;
@@ -261,7 +241,7 @@ private:
   trajectory_msgs::MultiDOFJointTrajectoryPoint nextPoint; //next point of the trajetory received
 
   SecurityMargin margin;
-  
+
   bool timeout = false;
   bool navigationPaused = false;
   ros::Time last_trj_stamp, time_count;
@@ -275,9 +255,6 @@ private:
   upo_actions::RotationInPlaceResult rot_result;
   upo_actions::RotationInPlaceGoalConstPtr rot_inplace;
   upo_actions::RotationInPlaceActionFeedback rotation_fb;
-  
-
-  
 };
 
 } /*  namespace Navigators  */

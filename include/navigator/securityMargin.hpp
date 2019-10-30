@@ -44,8 +44,6 @@ public:
   **/
   SecurityMargin();
 
-  SecurityMargin(ros::NodeHandle *n);
-
   /**
    * This function plays the game. If something enter inside the inner margin(frontal or back) 
    * it will be publishing false until the object or person has gone away further than the outer margin
@@ -66,7 +64,7 @@ public:
    * to true it initilize the markers messages
    * @param *n: pointer to a node handle
   **/
-  void setParams(ros::NodeHandle *n);
+  void setParams();
 
 private:
   
@@ -99,7 +97,7 @@ private:
 
   vector<float> secArrayFr, secArrayExtFr;
 
-  ros::NodeHandle *nh;
+  ros::NodeHandlePtr nh;
   ros::Publisher marker_int_pub, marker_ext_pub, stop_pub;
   ros::ServiceServer enableManualSrv;
   ros::ServiceClient stopMotorsSrv;

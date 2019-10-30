@@ -20,32 +20,16 @@ bool Displacement::activateBackwardSrv(std_srvs::TriggerRequest &req, std_srvs::
 
     return true;
 }
-void Displacement::refreshParams()
+void Displacement::dynReconfCb(arco_path_tracker::navConfig &config, uint32_t level)
 {
-    ros::param::get("/nav_node/holonomic", holonomic);
-    ros::param::get("/nav_node/do_navigate", do_navigate);
-    ros::param::get("/nav_node/angular_max_speed", angularMaxSpeed);
-    ros::param::get("/nav_node/linear_max_speed", linearMaxSpeed);
-    ros::param::get("/nav_node/angle_margin", angleMargin);
-    ros::param::get("/nav_node/dist_margin", distMargin);
-    ros::param::get("/nav_node/a", a);
-    ros::param::get("/nav_node/b", b);
-    ros::param::get("/nav_node/start_orientate_dist", startOrientateDist);
-
-    //The idea is to save the smallest distance to anyone and change the value of b according to this distance
-    closest.second.first = std::numeric_limits<float>::max();
-
-    for (auto it = dist2people.begin(); it != dist2people.end(); ++it)
-        if (it->second.first < closest.second.first)
-            closest.second = it->second;
-
-    //Now we set 1.5 has a distance to take into account persons
-    //TODO: Tener en cuenta solo las personas que entran dentro de un cono apuntando en la dirección de movimiento
-
-    if (closest.second.first < 1.5)
-    {
-        b = old_b * closest.second.first / 1.5;
-    }
+    this->holonomic = config.holonomic;
+    this->do_navigate = config.do_navigate;
+    this->angularMaxSpeed = config.angular_max_speed;
+    this->linearMaxSpeed = config.linear_max_speed;
+    this->angleMargin = config.angle_magin;
+    this->distMargin = config.dist_margin;
+    this->a = config.a;
+    this->b = config.b;
 }
 void Displacement::laser1Callback(const sensor_msgs::LaserScanConstPtr &scan)
 {
@@ -58,11 +42,11 @@ void Displacement::laser2Callback(const sensor_msgs::LaserScanConstPtr &scan)
     scanRGot = true;
 }
 //Displacement Class functions
-Displacement::Displacement(ros::NodeHandle *n, tf2_ros::Buffer *tfBuffer_)
+Displacement::Displacement(tf2_ros::Buffer *tfBuffer_)
 {
-    nh = n;
     //Pointer to the security margin object createdÃ§
-    margin.setParams(n);
+    nh.reset(new ros::NodeHandle("~"));
+    margin.setParams();
 
     tfBuffer = tfBuffer_;
 
@@ -93,19 +77,18 @@ Displacement::Displacement(ros::NodeHandle *n, tf2_ros::Buffer *tfBuffer_)
 
     backwardsServer = nh->advertiseService("backwards_on", &Displacement::activateBackwardSrv, this);
 
-    nh->param("/nav_node/debug", debug, (bool)true);
-    nh->param("/nav_node/do_navigate", do_navigate, (bool)true);
-    nh->param("/nav_node/holonomic", holonomic, (bool)true);
-    nh->param("/nav_node/angular_max_speed", angularMaxSpeed, (float)0.5);
-    nh->param("/nav_node/linear_max_speed", linearMaxSpeed, (float)0.3);
-    nh->param("/nav_node/angle_margin", angleMargin, (float)10);
-    nh->param("/nav_node/dist_margin", distMargin, (float)0.35);
-    nh->param("/nav_node/a", a, (float)5);
-    nh->param("/nav_node/b", b, (float)5);
-    nh->param("/nav_node/start_orientate_dist", startOrientateDist, (float)0.5);
-    nh->param("/nav_node/robot_base_frame", robot_frame, (string) "base_link");
-    nh->param("/nav_node/world_frame", world_frame, (string) "map");
-    old_b = b;
+    nh->param("debug", debug, (bool)true);
+    nh->param("do_navigate", do_navigate, (bool)true);
+    nh->param("holonomic", holonomic, (bool)true);
+    nh->param("angular_max_speed", angularMaxSpeed, (float)0.5);
+    nh->param("linear_max_speed", linearMaxSpeed, (float)0.3);
+    nh->param("angle_margin", angleMargin, (float)10);
+    nh->param("dist_margin", distMargin, (float)0.35);
+    nh->param("a", a, (float)5);
+    nh->param("b", b, (float)5);
+    nh->param("start_orientate_dist", startOrientateDist, (float)0.5);
+    nh->param("robot_base_frame", robot_frame, (string) "base_link");
+    nh->param("world_frame", world_frame, (string) "map");
 
     rotation_fb.header.frame_id = world_frame;
     navigate_fb.header.frame_id = world_frame;
@@ -119,7 +102,6 @@ Displacement::Displacement(ros::NodeHandle *n, tf2_ros::Buffer *tfBuffer_)
     //Flags for internal states
     trajReceived = false;
 
-    alpha = 30;
     Vx = Vy = Wz = 0;
     //Configure speed direction marker
 
@@ -226,12 +208,7 @@ bool Displacement::rotateToRefresh()
 
     return true;
 }
-void Displacement::trackedPersonCb(const people_msgs::People::ConstPtr &pl)
-{
-    peopl = *pl;
-    computeDistanceToPeople();
-    printPeople();
-}
+
 void Displacement::trajectoryCb(const trajectory_msgs::MultiDOFJointTrajectory::ConstPtr &trj)
 {
     if (navigate_server_ptr->isActive())
@@ -282,7 +259,6 @@ void Displacement::setRobotOrientation(float finalYaw, bool goal, bool pub, floa
     }
     else if (goal)
     {
-        ROS_WARN("hEY");
         setGoalReachedFlag(1);
     }
 
@@ -299,13 +275,6 @@ void Displacement::aproximateTo(geometry_msgs::PoseStamped *pose, bool isGoal, b
 
     setRobotOrientation(getYawFromQuat(pose->pose.orientation), isGoal, 1, 1.3 * angularMaxSpeed, angleMargin);
 }
-/*
-  *   The idea is to start moving in the direction of the nextPoint relative to base_link frame
-  *   But, to give some preference to X direction of muvement(forward) because of reasons(in ARCO for example we have blind areas in the laterals)
-  *   So we will give velocity v=(vx,vy) in the direction of the next point, but at the same time the robot will rotate to face the point and thus
-  *   the mouvement will finally be in x direction. 
-  *   Also, we will use differents top speed for x and y because is more dangerous to move in y direction than x. 
-*/
 void Displacement::moveHolon(double finalYaw)
 {
 
@@ -334,60 +303,53 @@ void Displacement::moveHolon(double finalYaw)
 }
 void Displacement::moveNonHolon()
 {
-    //TODO Change 40 value
-    if (debug)
+    float angleBack;
+    if (angle2NextPoint < 0)
     {
+        angleBack = angle2NextPoint + M_PI;
+    }
+    else
+    {
+        angleBack = angle2NextPoint - M_PI;
+    }
 
-        if (fabs(angle2NextPoint) > d2rad(15)) //Rot in place
+    if (fabs(angle2NextPoint) > d2rad(15)) //Rot in place
+    {
+        if (!backwards && validateRotInPlace())
         {
-            if (backwards && ros::Time::now() - timeout_backwards > ros::Duration(20))
+            Wz = getVel(angularMaxSpeed, a, angle2NextPoint);
+        }
+        else
+        { //uh, go backwards
+            if (!backwards)
             {
-                if (validateRotInPlace())
-                {
-                    backwards = false;
-                    Wz = getVel(angularMaxSpeed, a, angle2NextPoint);
-                }
+                backwards = true;
+                time_count = ros::Time::now();
             }
-
-            if (validateRotInPlace() && !backwards)
+            else if (ros::Time::now() - time_count > ros::Duration(15))
             {
-                Wz = getVel(angularMaxSpeed, a, angle2NextPoint);
+                backwards = false;
+            }
+            else if (fabs(angleBack) > d2rad(15))
+            {
+                Wz = getVel(angularMaxSpeed / 2, a / 2, angleBack);
             }
             else
-            { //!MARCHA ATRAS
-                if (!backwards)
-                    timeout_backwards = ros::Time::now();
-
-                Vx = -1 * getVel(linearMaxSpeed, b, dist2GlobalGoal);
-                Vy = 0;
-                Wz = -1 * getVel(angularMaxSpeed, a, angle2NextPoint);
-                backwards = true;
+            {
+                Vx = -getVel(linearMaxSpeed / 2, b / 2, dist2GlobalGoal);
+                Wz = getVel(angularMaxSpeed / 2, a / 2, angleBack);
             }
-        }
-        else if (!backwards)
-        {
-            Vx = getVel(linearMaxSpeed, b, dist2GlobalGoal);
-            Vy = 0;
-            Wz = getVel(angularMaxSpeed, a, angle2NextPoint);
         }
     }
     else
     {
-        if (fabs(angle2NextPoint) > d2rad(15)) //Rot in place
-        {
-            Wz = getVel(angularMaxSpeed, a, angle2NextPoint);
-        }
-        else if (!backwards)
-        {
-            Vx = getVel(linearMaxSpeed, b, dist2GlobalGoal);
-            Vy = 0;
-            Wz = getVel(angularMaxSpeed, a, angle2NextPoint);
-        }
+        Vx = getVel(linearMaxSpeed, b, dist2GlobalGoal);
+        Vy = 0;
+        Wz = getVel(angularMaxSpeed, a, angle2NextPoint);
     }
 }
 void Displacement::navigate()
 {
-    refreshParams();
     if (rot_server_ptr->isNewGoalAvailable())
     {
         rot_inplace = rot_server_ptr->acceptNewGoal();
@@ -479,16 +441,6 @@ void Displacement::navigate()
     }
 }
 
-/**
- * Inputs must be:
- * max: m/s or rad/s
- * var: m/s or rad
- *  
-**/
-float Displacement::getVel(float max, float exp_const, float var)
-{
-    return max * (1 - exp(-exp_const * fabs(var))) * var / fabs(var);
-}
 bool Displacement::hasFinished()
 {
     return goalReached.data;
@@ -636,103 +588,5 @@ float Displacement::getYawFromQuat(geometry_msgs::Quaternion quat)
     M.getRPY(r, p, y);
 
     return y / M_PI * 180;
-}
-void Displacement::computeDistanceToPeople()
-{
-
-    dist2people.clear();
-
-    PoseStamp bl_pose, person;
-
-    bl_pose.header.frame_id = robot_frame;
-    bl_pose.header.seq = rand();
-    bl_pose.header.stamp = ros::Time::now();
-
-    bl_pose.pose.position.x = 0;
-    bl_pose.pose.position.y = 0;
-    bl_pose.pose.position.z = 0;
-
-    bl_pose.pose.orientation.w = 1;
-    bl_pose.pose.orientation.z = 0;
-
-    bl_pose = transformPose(bl_pose, robot_frame, world_frame);
-    pair<string, pair<float, float>> p;
-
-    for (int i = 0; i < peopl.people.size(); i++)
-    {
-
-        person.pose.position = peopl.people.at(i).position;
-        person = transformPose(person, world_frame, robot_frame);
-
-        p.first = peopl.people.at(i).name;
-        p.second.first = euclideanDistance(person);
-        p.second.second = atan2(person.pose.position.y, person.pose.position.x) / M_PI * 180;
-        if (p.second.second < 0)
-            p.second.second += 360;
-
-        dist2people.insert(p);
-    }
-}
-void Displacement::printPeople()
-{
-
-    ROS_INFO("\x1B[32m\n\tName  \t Distance \t Angle \n");
-    for (auto &it : dist2people)
-    {
-        ROS_INFO("\x1B[32m\t  %s\t %.2f\t %.2f\n", it.first.c_str(), it.second.first, it.second.second);
-    }
-    ROS_INFO("\x1B[0m");
-}
-//To check if anyone in the people list is in the direction mouvement cone +-40º centered in the
-//velocity direction
-bool Displacement::someoneInFront()
-{
-    return someoneInFront(Vx, Vy);
-}
-bool Displacement::someoneInFront(float vx, float vy)
-{
-
-    if (Vx != 0 || Vy != 0)
-    {
-
-        float theta1 = atan2(vy, vx) / M_PI * 180;
-        float t2 = theta1 + alpha;
-        float t3 = theta1 - alpha;
-
-        if (theta1 < 0)
-            theta1 += 360;
-        if (t2 > 360)
-            t2 -= 360;
-        if (t3 < 0)
-            t3 += 360;
-        ROS_INFO_THROTTLE(1, "T2: %.2f \t T3: %.2f", t2, t3);
-
-        //Case 1: theta 1 > alpha && theta < 360-alpha
-        if (theta1 > alpha && theta1 < (360 - alpha))
-        {
-            for (auto &it : dist2people)
-                if (it.second.second < t2 && it.second.second > t3)
-                    return true;
-        }
-        //Case 2: theta 1 < alpha
-        if (theta1 < alpha)
-        {
-            for (auto &it : dist2people)
-            {
-                if (it.second.second < t2 && (fabs(t3 - 360) + it.second.second) < 2 * alpha)
-                    return true;
-            }
-        }
-        //Case 3:  theta1 > 360-alpha
-        if (theta1 > (360 - alpha))
-        {
-            for (auto &it : dist2people)
-            {
-                if (it.second.second > t3 && t2 + fabs(it.second.second - 360) < 2 * alpha)
-                    return true;
-            }
-        }
-    }
-    return false;
 }
 } // namespace Navigators

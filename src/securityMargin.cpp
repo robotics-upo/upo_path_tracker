@@ -1,13 +1,9 @@
 
 #include <navigator/securityMargin.hpp>
 
-SecurityMargin::SecurityMargin(ros::NodeHandle *n)
-{
-    setParams(n);
-}
 SecurityMargin::SecurityMargin()
 {
-    paramsConfigured = false;
+    setParams();
 }
 
 void SecurityMargin::laser1Callback(const sensor_msgs::LaserScanConstPtr &scan) //Front
@@ -49,26 +45,25 @@ bool SecurityMargin::switchCtrlSrvCb(std_srvs::TriggerRequest &req, std_srvs::Tr
     }
     return rep.success;
 }
-void SecurityMargin::setParams(ros::NodeHandle *n)
+void SecurityMargin::setParams()
 {
-    nh = n;
+    nh.reset(new ros::NodeHandle("~"));
     //Markers publishers
     string topicPath;
 
-    nh->param("nav_node/security_stop_topic", topicPath, (string) "/security_stop");
-    stop_pub = nh->advertise<std_msgs::Bool>(topicPath, 0);
+    stop_pub = nh->advertise<std_msgs::Bool>("security_stop", 1);
 
-    nh->param("nav_node/robot_base_frame", base_link_frame, (string) "base_link");
-    nh->param("nav_node/full_laser_topic", topicPath, (string) "/scanMulti");
+    nh->param("robot_base_frame", base_link_frame, (string) "base_link");
+    nh->param("full_laser_topic", topicPath, (string) "/scanMulti");
 
     laser1_sub = nh->subscribe<sensor_msgs::LaserScan>(topicPath.c_str(), 1, &SecurityMargin::laser1Callback, this);
 
-    nh->param("nav_node/f", f, (float)1);
-    nh->param("nav_node/inner_radius", innerSecDistFront, (float)0.3);
-    nh->param("nav_node/outer_radius", extSecDistFront, (float)0.45);
+    nh->param("f", f, (float)1);
+    nh->param("inner_radius", innerSecDistFront, (float)0.3);
+    nh->param("outer_radius", extSecDistFront, (float)0.45);
 
-    enableManualSrv = nh->advertiseService("/switch_control_mode", &SecurityMargin::switchCtrlSrvCb, this);
-    stopMotorsSrv = nh->serviceClient<std_srvs::Trigger>("/security_stop_srv");
+    enableManualSrv = nh->advertiseService("switch_control_mode", &SecurityMargin::switchCtrlSrvCb, this);
+    stopMotorsSrv = nh->serviceClient<std_srvs::Trigger>("security_stop_srv");
 
     ROS_INFO("Robot base frame: %s", base_link_frame.c_str());
     ROS_INFO("F factor: %.2f", f);

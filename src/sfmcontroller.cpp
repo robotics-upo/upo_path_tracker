@@ -34,7 +34,7 @@ SFMNav::SFMNav(ros::NodeHandle *n, SecurityMargin *margin_, tf2_ros::Buffer *tfB
     nh = n;
     //Pointer to the security margin object created
     margin = margin_;
-    margin->setParams(n);
+    margin->setParams();
     tfBuffer = tfBuffer_;
 
     //Right now we will put the ARCO cmd vel topic but in the future it will selectable
