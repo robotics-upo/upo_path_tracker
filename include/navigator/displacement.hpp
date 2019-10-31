@@ -55,20 +55,65 @@ public:
   Displacement(tf2_ros::Buffer *tfBuffer_);
 
   /**
-   * Make a aproximation manoeuvre smoothly
-   * @param *pose: Pointer to pose in map frame to get to
-   * @param isGoal: If true publish to the goal reached topic and change the flag to true once manouevre achieved
-   * @param isHome: True when used with the goHomeLab function, it should approximate backwards
-  **/
-  void aproximateTo(geometry_msgs::PoseStamped *pose, bool isGoal, bool isHome);
-
-  /**
    * Main function, it takes the next pose to go and pass it
    * to the holonomic/no-holonomic navigastion functions
    * @param isHome: To use when goHomeLab works
   **/
   void navigate();
 
+  void dynReconfCb(arco_path_tracker::navConfig &config, uint32_t level);
+  /**
+   * Callbacks to get the needed info 
+  **/
+  void trajectoryCb(const trajectory_msgs::MultiDOFJointTrajectory::ConstPtr &trj);
+private:
+  bool activateBackwardSrv(std_srvs::TriggerRequest &req, std_srvs::TriggerResponse &rep);
+  void laser1Callback(const sensor_msgs::LaserScanConstPtr &scan);
+  void laser2Callback(const sensor_msgs::LaserScanConstPtr &scan);
+  bool validateRotInPlace();
+  bool rotateToRefresh();
+  /**
+   * Functions use to transform mainly between map and base_link frames
+   * @param originalPose/point: The position we want to transform
+   * @param from: frame of the original pose/point
+   * @param to: frame in which we want the pose
+   * @return: pose stamped in the desired frame
+  **/
+  PoseStamp transformPose(PoseStamp originalPose, std::string from, std::string to);
+  PoseStamp transformPose(trajectory_msgs::MultiDOFJointTrajectoryPoint point, std::string from, std::string to);
+
+  void rotationInPlace(geometry_msgs::Quaternion finalOrientation, double threshold_);  
+  bool rotationInPlace(tf2Scalar dYaw, double threshold_);
+  
+  
+
+  /**
+   * As its name says, it publishes the Vx,Vy and Wz
+   * Also publishes to muving state topic as true if any of the velocity componentes are differents from zero
+   * and the goal reached topic. This two topics are mainly used by the ros_bridge to communicate with camunda
+  **/
+  void publishCmdVel();
+
+  /**
+   * It puts Vx, Vy and Wz to zero and publish the twist messages,
+   * also publishes the muving state as false and the value of goal reached value at that moment 
+  **/
+  void publishZeroVelocity();
+
+  /**
+   * Holonomic displacement function, called by the navigate function
+   * @param finalYaw: If you want to force a final yaw
+  **/
+  void moveHolon(double finalYaw);
+  /**
+   * No-Holonomic displacement function, called by the navigate function
+  **/
+  void moveNonHolon();
+  
+  void navGoalCb();
+  void navPreemptCb();
+  void rotGoalCb();
+  void rotPreemptCb();
   /**
    * Return the value of goalReached flag
    * @return goalReached.data
@@ -92,27 +137,12 @@ public:
   void setRobotOrientation(geometry_msgs::Quaternion q, bool goal, bool pub, float speed, float angleMargin_);
   void setRobotOrientation(float finalYaw, bool goal, bool pub, float speed, float angleMargin_);
 
+  
   /**
-   * Callbacks to get the needed info 
+   * Auxiliar function to get the yaw in degress from a quaternion
+   * @param quat: quaternion to get the yaw from
   **/
-  void trajectoryCb(const trajectory_msgs::MultiDOFJointTrajectory::ConstPtr &trj);
-  void dynReconfCb(arco_path_tracker::navConfig &config, uint32_t level);
-
-private:
-  bool activateBackwardSrv(std_srvs::TriggerRequest &req, std_srvs::TriggerResponse &rep);
-  void laser1Callback(const sensor_msgs::LaserScanConstPtr &scan);
-  void laser2Callback(const sensor_msgs::LaserScanConstPtr &scan);
-  bool validateRotInPlace();
-  bool rotateToRefresh();
-  /**
-   * Functions use to transform mainly between map and base_link frames
-   * @param originalPose/point: The position we want to transform
-   * @param from: frame of the original pose/point
-   * @param to: frame in which we want the pose
-   * @return: pose stamped in the desired frame
-  **/
-  PoseStamp transformPose(PoseStamp originalPose, std::string from, std::string to);
-  PoseStamp transformPose(trajectory_msgs::MultiDOFJointTrajectoryPoint point, std::string from, std::string to);
+  float getYawFromQuat(geometry_msgs::Quaternion quat);
 
   /**
    * Functions to help to calculate distances
@@ -145,34 +175,6 @@ private:
     return angle / M_PI * 180;
   }
   /**
-   * As its name says, it publishes the Vx,Vy and Wz
-   * Also publishes to muving state topic as true if any of the velocity componentes are differents from zero
-   * and the goal reached topic. This two topics are mainly used by the ros_bridge to communicate with camunda
-  **/
-  void publishCmdVel();
-
-  /**
-   * It puts Vx, Vy and Wz to zero and publish the twist messages,
-   * also publishes the muving state as false and the value of goal reached value at that moment 
-  **/
-  void publishZeroVelocity();
-
-  /**
-   * Holonomic displacement function, called by the navigate function
-   * @param finalYaw: If you want to force a final yaw
-  **/
-  void moveHolon(double finalYaw);
-  /**
-   * No-Holonomic displacement function, called by the navigate function
-  **/
-  void moveNonHolon();
-  /**
-   * Auxiliar function to get the yaw in degress from a quaternion
-   * @param quat: quaternion to get the yaw from
-  **/
-  float getYawFromQuat(geometry_msgs::Quaternion quat);
-
-  /**
    * Exponential speed calculator
    * @max: speed at inf
    * @exp_const: the decay constant
@@ -183,11 +185,10 @@ private:
   {
     return max * (1 - exp(-exp_const * fabs(var))) * var / fabs(var);
   }
-
-  void navGoalCb();
-  void navPreemptCb();
-  void rotGoalCb();
-  void rotPreemptCb();
+  inline float getVel(double max, double exp_const, double var)
+  {
+    return max * (1 - exp(-exp_const * fabs(var))) * var / fabs(var);
+  }
 
   //?
   sensor_msgs::LaserScanConstPtr scanL, scanR;
@@ -211,10 +212,10 @@ private:
   float dist2GlobalGoal, dist2NextPoint;   //Distances variables
   float angle2NextPoint, angle2GlobalGoal; //Angles variables
   float angleMargin, distMargin;           //Margins
-  float angularMaxSpeed, linearMaxSpeed;   //Top speeds
+  double angularMaxSpeed, linearMaxSpeed;   //Top speeds
 
   //Custom speed testing parameters
-  float v, a, b;
+  double v, a, b;
   float startOrientateDist;
 
   visualization_msgs::Marker speed, rot_speed;
@@ -255,6 +256,11 @@ private:
   upo_actions::RotationInPlaceResult rot_result;
   upo_actions::RotationInPlaceGoalConstPtr rot_inplace;
   upo_actions::RotationInPlaceActionFeedback rotation_fb;
+
+  //
+
+  tf2::Quaternion robotQ, finalQ, q_rot, q_f;
+  double Todeg;
 };
 
 } /*  namespace Navigators  */

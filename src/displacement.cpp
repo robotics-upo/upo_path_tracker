@@ -49,6 +49,7 @@ Displacement::Displacement(tf2_ros::Buffer *tfBuffer_)
     margin.setParams();
 
     tfBuffer = tfBuffer_;
+    Todeg = 180 / M_PI;
 
     //? Detect if possible to rotate in place
     scanRGot = false, scanLGot = false, backwards = false;
@@ -80,12 +81,12 @@ Displacement::Displacement(tf2_ros::Buffer *tfBuffer_)
     nh->param("debug", debug, (bool)true);
     nh->param("do_navigate", do_navigate, (bool)true);
     nh->param("holonomic", holonomic, (bool)true);
-    nh->param("angular_max_speed", angularMaxSpeed, (float)0.5);
-    nh->param("linear_max_speed", linearMaxSpeed, (float)0.3);
+    nh->param("angular_max_speed", angularMaxSpeed, (double)0.5);
+    nh->param("linear_max_speed", linearMaxSpeed, (double)0.3);
     nh->param("angle_margin", angleMargin, (float)10);
     nh->param("dist_margin", distMargin, (float)0.35);
-    nh->param("a", a, (float)5);
-    nh->param("b", b, (float)5);
+    nh->param("a", a, (double)5);
+    nh->param("b", b, (double)5);
     nh->param("start_orientate_dist", startOrientateDist, (float)0.5);
     nh->param("robot_base_frame", robot_frame, (string) "base_link");
     nh->param("world_frame", world_frame, (string) "map");
@@ -265,15 +266,54 @@ void Displacement::setRobotOrientation(float finalYaw, bool goal, bool pub, floa
     if (pub)
         publishCmdVel();
 }
-void Displacement::aproximateTo(geometry_msgs::PoseStamped *pose, bool isGoal, bool isHome)
+
+void Displacement::rotationInPlace(geometry_msgs::Quaternion finalOrientation, double threshold_)
+{
+    PoseStamp robotPose;
+
+    robotPose.header.frame_id = robot_frame;
+    robotPose.header.stamp = ros::Time(0);
+    robotPose.pose.orientation.w = 1;
+    robotPose = transformPose(robotPose, robot_frame, world_frame);
+
+    robotQ.setW(robotPose.pose.orientation.w);
+    robotQ.setZ(robotPose.pose.orientation.z);
+
+    finalQ.setW(finalOrientation.w);
+    finalQ.setZ(finalOrientation.z);
+
+    //This give us the angular difference to the final orientation
+    tf2Scalar shortest = tf2::angleShortestPath(robotQ, finalQ);
+
+    rotationInPlace(shortest, threshold_);
+}
+bool Displacement::rotationInPlace(tf2Scalar dYaw, double threshold_)
 {
 
-    geometry_msgs::PoseStamped p = transformPose(*pose, world_frame, robot_frame);
+    q_rot.setRPY(0, 0, dYaw);
 
-    Vx = p.pose.position.x / 2;
-    Vy = p.pose.position.y / 2;
+    q_f = robotQ * q_rot;
+    q_f.normalize();
 
-    setRobotOrientation(getYawFromQuat(pose->pose.orientation), isGoal, 1, 1.3 * angularMaxSpeed, angleMargin);
+    double angle2 = tf2::angleShortestPath(finalQ, q_f);
+
+    if (angle2 > dYaw)
+    {
+        dYaw *= -1;
+    }
+
+    double var = static_cast<double>(dYaw); //radians
+
+    if (var * Todeg < threshold_)
+    {
+        Wz = getVel(angularMaxSpeed, a, var);
+        return true;
+    }
+    else
+    {
+        Wz = 0;
+        return false;
+    }
 }
 void Displacement::moveHolon(double finalYaw)
 {
@@ -407,11 +447,12 @@ void Displacement::navigate()
 
         PoseStamp nextPoseBlFrame = transformPose(nextPoint, world_frame, robot_frame);
         angle2NextPoint = atan2(nextPoseBlFrame.pose.position.y, nextPoseBlFrame.pose.position.x);
+
         dist2NextPoint = euclideanDistance(nextPoseBlFrame);
 
         globalGoalPose = transformPose(globalGoal, world_frame, robot_frame);
         dist2GlobalGoal = euclideanDistance(globalGoalPose);
-        angle2GlobalGoal = getYawFromQuat(globalGoalPose.pose.orientation);
+        angle2GlobalGoal = getYawFromQuat(globalGoal.pose.orientation);
         dist2goal.data = dist2GlobalGoal;
         dist2goal_pub.publish(dist2goal);
 
@@ -425,7 +466,16 @@ void Displacement::navigate()
         if (dist2GlobalGoal < distMargin && !goalReached.data)
         {
             ROS_INFO_ONCE("Maniobra de aproximacion");
-            aproximateTo(&globalGoal, 1, 0);
+
+            //First orientate towards the goal
+            if (!rotationInPlace(atan2(globalGoalPose.pose.position.y, globalGoalPose.pose.position.x), 5) && dist2GlobalGoal > distMargin / 3)
+            {
+                Vx = globalGoalPose.pose.position.x / 2;
+            }
+            else if (Wz == 0)
+            {
+                rotationInPlace(globalGoal.pose.orientation, 5);
+            }
 
             margin.setMode(1);
         }
