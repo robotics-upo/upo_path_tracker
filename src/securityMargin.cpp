@@ -62,7 +62,7 @@ void SecurityMargin::setParams()
     nh->param("inner_radius", innerSecDistFront, (float)0.3);
     nh->param("outer_radius", extSecDistFront, (float)0.45);
 
-    enableManualSrv = nh->advertiseService("switch_control_mode", &SecurityMargin::switchCtrlSrvCb, this);
+    //enableManualSrv = nh->advertiseService("switch_control_mode", &SecurityMargin::switchCtrlSrvCb, this);
     stopMotorsSrv = nh->serviceClient<std_srvs::Trigger>("security_stop_srv");
 
     ROS_INFO("Robot base frame: %s", base_link_frame.c_str());
