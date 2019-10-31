@@ -208,10 +208,10 @@ private:
 
   float rec_rot, rot_start;
 
-  float Vx, Vy, Wz;                        //Velocity variables
-  float dist2GlobalGoal, dist2NextPoint;   //Distances variables
-  float angle2NextPoint, angle2GlobalGoal; //Angles variables
-  float angleMargin, distMargin;           //Margins
+  double Vx, Vy, Wz;                        //Velocity variables
+  double dist2GlobalGoal, dist2NextPoint;   //Distances variables
+  double angle2NextPoint, angle2GlobalGoal; //Angles variables
+  double angleMargin, distMargin;           //Margins
   double angularMaxSpeed, linearMaxSpeed;   //Top speeds
 
   //Custom speed testing parameters

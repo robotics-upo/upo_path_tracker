@@ -83,8 +83,8 @@ Displacement::Displacement(tf2_ros::Buffer *tfBuffer_)
     nh->param("holonomic", holonomic, (bool)true);
     nh->param("angular_max_speed", angularMaxSpeed, (double)0.5);
     nh->param("linear_max_speed", linearMaxSpeed, (double)0.3);
-    nh->param("angle_margin", angleMargin, (float)10);
-    nh->param("dist_margin", distMargin, (float)0.35);
+    nh->param("angle_margin", angleMargin, (double)10);
+    nh->param("dist_margin", distMargin, (double)0.35);
     nh->param("a", a, (double)5);
     nh->param("b", b, (double)5);
     nh->param("start_orientate_dist", startOrientateDist, (float)0.5);
@@ -343,7 +343,7 @@ void Displacement::moveHolon(double finalYaw)
 }
 void Displacement::moveNonHolon()
 {
-    float angleBack;
+    double angleBack;
     if (angle2NextPoint < 0)
     {
         angleBack = angle2NextPoint + M_PI;
