@@ -188,7 +188,7 @@ bool Displacement::validateRotInPlace()
 
     scanRGot = false;
     scanLGot = false;
-    while (!scanRGot && !scanLGot)
+    /*while (!scanRGot && !scanLGot)
     {
         ros::spinOnce();
     }
@@ -205,9 +205,9 @@ bool Displacement::validateRotInPlace()
             ++cnt2;
     }
 
-    //!if (cnt1 > 5 || cnt2 > 5)
-    //!    ret = false;
-
+    if (cnt1 > 5 || cnt2 > 5)
+        ret = false;
+    */
     return ret;
 }
 bool Displacement::rotateToRefresh()
