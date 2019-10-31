@@ -241,15 +241,14 @@ private:
 
   trajectory_msgs::MultiDOFJointTrajectoryPoint nextPoint; //next point of the trajetory received
 
-  SecurityMargin margin;
-
   bool timeout = false;
   bool navigationPaused = false;
   ros::Time last_trj_stamp, time_count;
 
   std::unique_ptr<NavigateServer> navigate_server_ptr;
   std::unique_ptr<RotationInPlaceServer> rot_server_ptr;
-
+  std::unique_ptr<SecurityMargin> margin;
+  
   upo_actions::NavigateResult navigate_result;
   upo_actions::NavigateActionFeedback navigate_fb;
   upo_actions::NavigateGoalConstPtr navigate_goal;

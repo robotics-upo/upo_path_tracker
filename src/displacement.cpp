@@ -46,7 +46,7 @@ Displacement::Displacement(tf2_ros::Buffer *tfBuffer_)
 {
     //Pointer to the security margin object createdÃ§
     nh.reset(new ros::NodeHandle("~"));
-    margin.setParams();
+    margin.reset(new SecurityMargin);
 
     tfBuffer = tfBuffer_;
     Todeg = 180 / M_PI;
@@ -66,12 +66,12 @@ Displacement::Displacement(tf2_ros::Buffer *tfBuffer_)
     approach_man_pub = nh->advertise<std_msgs::Bool>("/trajectory_tracker/aproach_manoeuvre", 1);
     rot_recovery_status_pub = nh->advertise<std_msgs::Bool>("/nav_node/rot_recovery_status", 1);
 
-    navigate_server_ptr.reset(new NavigateServer(*nh, "Navigation", false));
+    navigate_server_ptr.reset(new NavigateServer(*nh, "/Navigation", false));
     navigate_server_ptr->registerGoalCallback(boost::bind(&Displacement::navGoalCb, this));
     navigate_server_ptr->registerPreemptCallback(boost::bind(&Displacement::navPreemptCb, this));
     navigate_server_ptr->start();
 
-    rot_server_ptr.reset(new RotationInPlaceServer(*nh, "Recovery_Rotation", false));
+    rot_server_ptr.reset(new RotationInPlaceServer(*nh, "/Recovery_Rotation", false));
     rot_server_ptr->registerGoalCallback(boost::bind(&Displacement::rotGoalCb, this));
     rot_server_ptr->registerPreemptCallback(boost::bind(&Displacement::rotPreemptCb, this));
     rot_server_ptr->start();
@@ -171,7 +171,7 @@ bool Displacement::validateRotInPlace()
 
     scanRGot = false;
     scanLGot = false;
-    while (!scanRGot && !scanLGot)
+    /*while (!scanRGot && !scanLGot)
     {
         ros::spinOnce();
     }
@@ -188,9 +188,9 @@ bool Displacement::validateRotInPlace()
             ++cnt2;
     }
 
-    //!if (cnt1 > 5 || cnt2 > 5)
-    //!    ret = false;
-
+    if (cnt1 > 5 || cnt2 > 5)
+        ret = false;
+    */
     return ret;
 }
 bool Displacement::rotateToRefresh()
@@ -218,7 +218,7 @@ void Displacement::trajectoryCb(const trajectory_msgs::MultiDOFJointTrajectory::
         trajReceived = true;
         last_trj_stamp = trj->header.stamp;
 
-        margin.setMode(0);
+        margin->setMode(0);
     }
 }
 void Displacement::setRobotOrientation(geometry_msgs::Quaternion q, bool goal, bool pub, float speed, float angleMargin_)
@@ -284,7 +284,7 @@ void Displacement::rotationInPlace(geometry_msgs::Quaternion finalOrientation, d
 
     //This give us the angular difference to the final orientation
     tf2Scalar shortest = tf2::angleShortestPath(robotQ, finalQ);
-
+    cout<<"Shortest: "<<shortest<<endl;
     rotationInPlace(shortest, threshold_);
 }
 bool Displacement::rotationInPlace(tf2Scalar dYaw, double threshold_)
@@ -303,7 +303,7 @@ bool Displacement::rotationInPlace(tf2Scalar dYaw, double threshold_)
     }
 
     double var = static_cast<double>(dYaw); //radians
-
+    cout<<"Var: "<<var<<endl;
     if (var * Todeg < threshold_)
     {
         Wz = getVel(angularMaxSpeed, a, var);
@@ -455,17 +455,18 @@ void Displacement::navigate()
         angle2GlobalGoal = getYawFromQuat(globalGoal.pose.orientation);
         dist2goal.data = dist2GlobalGoal;
         dist2goal_pub.publish(dist2goal);
+        ROS_INFO("angle2NextPoint: %.2f\t dist2NextPoint: %.2f\t dist2GlobalGoal: %.2f", angle2NextPoint, dist2NextPoint, dist2GlobalGoal);
 
         if (dist2GlobalGoal < 1 || ros::Time::now() - time_count < ros::Duration(2))
         {
-            margin.setMode(1);
+            //margin->setMode(1);
             std_msgs::Bool flg;
             flg.data = true;
             approach_man_pub.publish(flg);
         }
         if (dist2GlobalGoal < distMargin && !goalReached.data)
         {
-            ROS_INFO_ONCE("Maniobra de aproximacion");
+            ROS_INFO("Maniobra de aproximacion");
 
             //First orientate towards the goal
             if (!rotationInPlace(atan2(globalGoalPose.pose.position.y, globalGoalPose.pose.position.x), 5) && dist2GlobalGoal > distMargin / 3)
@@ -477,15 +478,17 @@ void Displacement::navigate()
                 rotationInPlace(globalGoal.pose.orientation, 5);
             }
 
-            margin.setMode(1);
+            //margin->setMode(1);
         }
         else if (holonomic)
         {
             moveHolon(getYawFromQuat(globalGoal.pose.orientation));
+           
         }
         else
         {
             moveNonHolon();
+            
         }
         publishCmdVel();
     }
@@ -544,7 +547,7 @@ void Displacement::publishCmdVel()
     if (Vx == 0 && Vy == 0 && Wz == 0)
         movingState.data = false;
 
-    if (margin.canIMove() && !timeout)
+    if (!timeout)// && margin->canIMove())
     {
         if (navigationPaused)
         {
