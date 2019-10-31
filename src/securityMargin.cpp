@@ -28,51 +28,26 @@ void SecurityMargin::setMode(int mode)
         status = 0;
     }
 }
-bool SecurityMargin::switchCtrlSrvCb(std_srvs::TriggerRequest &req, std_srvs::TriggerResponse &rep)
-{
-
-    if (status == 4)
-    {
-        setMode(0);
-        rep.message = "Mode changed to autonomous";
-        rep.success = true;
-    }
-    else
-    {
-        setMode(1);
-        rep.message = "Mode changed to manual";
-        rep.success = true;
-    }
-    return rep.success;
-}
 void SecurityMargin::setParams()
 {
     nh.reset(new ros::NodeHandle("~"));
-    //Markers publishers
-    string topicPath;
-
-    stop_pub = nh->advertise<std_msgs::Bool>("security_stop", 1);
 
     nh->param("robot_base_frame", base_link_frame, (string) "base_link");
-    nh->param("full_laser_topic", topicPath, (string) "/scanMulti");
-
-    laser1_sub = nh->subscribe<sensor_msgs::LaserScan>(topicPath.c_str(), 1, &SecurityMargin::laser1Callback, this);
-
     nh->param("f", f, (float)1);
     nh->param("inner_radius", innerSecDistFront, (float)0.3);
     nh->param("outer_radius", extSecDistFront, (float)0.45);
 
-    //enableManualSrv = nh->advertiseService("switch_control_mode", &SecurityMargin::switchCtrlSrvCb, this);
-    stopMotorsSrv = nh->serviceClient<std_srvs::Trigger>("security_stop_srv");
+    stop_pub = nh->advertise<std_msgs::Bool>("security_stop", 1);
+    marker_int_pub = nh->advertise<visualization_msgs::Marker>("/securityDistMarkersInt", 2);
+    marker_ext_pub = nh->advertise<visualization_msgs::Marker>("/securityDistMarkersExt", 2);
+    laser1_sub = nh->subscribe<sensor_msgs::LaserScan>("/scanMulti", 1, &SecurityMargin::laser1Callback, this);
 
-    ROS_INFO("Robot base frame: %s", base_link_frame.c_str());
-    ROS_INFO("F factor: %.2f", f);
-    ROS_INFO("Inner radius: %.2f", innerSecDistFront);
-    ROS_INFO("Outer radius: %.2f ", extSecDistFront);
 
     //Control flags
     status = 0;
     laserGot = false;
+    cnt = 0;
+    cnt2 = 0;
 
     red.a = 1;
     red.b = 0;
@@ -89,20 +64,13 @@ void SecurityMargin::setParams()
     blue.b = 1;
     blue.r = 0;
 
-    cnt = 0;
-    cnt2 = 0;
-
-    marker_int_pub = nh->advertise<visualization_msgs::Marker>("/securityDistMarkersInt", 2);
-    marker_ext_pub = nh->advertise<visualization_msgs::Marker>("/securityDistMarkersExt", 2);
-
     markerIntFr.header.frame_id = base_link_frame;
-
     markerIntFr.header.stamp = ros::Time();
     markerIntFr.ns = "security_perimeter";
     markerIntFr.id = 1;
     markerIntFr.type = visualization_msgs::Marker::LINE_STRIP;
     markerIntFr.action = visualization_msgs::Marker::ADD;
-    markerIntFr.lifetime = ros::Duration(1);
+    markerIntFr.lifetime = ros::Duration(2);
     markerIntFr.scale.x = 0.025;
     markerIntFr.color = green;
 
@@ -110,10 +78,6 @@ void SecurityMargin::setParams()
 
     markerExtFr.header.stamp = ros::Time();
     markerExtFr.id = 2;
-
-    ROS_INFO(PRINTF_CYAN "Security Margin Configured");
-
-    paramsConfigured = true;
 }
 //Mode 2: This is a ellipse centered at the robot frame, with the long axis along the x axis of the robot frame.
 void SecurityMargin::buildElliptic()
@@ -146,8 +110,6 @@ void SecurityMargin::buildElliptic()
     markerIntFr.points.push_back(p);
     p.x *= extSecDistFront / innerSecDistFront;
     markerExtFr.points.push_back(p);
-
-    publishRvizMarkers();
 }
 void SecurityMargin::publishRvizMarkers()
 {
@@ -216,7 +178,6 @@ bool SecurityMargin::checkObstacles()
                     status = 1;
 
                 ret = true;
-                publishRvizMarkers();
                 return ret;
             }
             else
@@ -230,10 +191,8 @@ bool SecurityMargin::checkObstacles()
 
     if (status == 1)
     {
-        ROS_WARN("Status 2");
         status = 2;
         ret = true;
-        publishRvizMarkers();
         return ret;
     }
 
@@ -258,16 +217,12 @@ bool SecurityMargin::checkObstacles()
                 if (status == 2)
                 {
                     ret = true;
-                    publishRvizMarkers();
-                    ROS_WARN("Status 2");
                     return ret;
                 }
                 if (status == 0)
                 {
-                    publishRvizMarkers();
                     status = 3;
                     ret = false;
-                    ROS_WARN("Status set to 3 from 0");
                     return ret;
                 }
                 extObst = true;
@@ -284,10 +239,8 @@ bool SecurityMargin::checkObstacles()
     if (status == 3)
     {
         status = 0;
-        ROS_WARN("STATUS RESET TO 0");
     }
 
-    publishRvizMarkers();
     return false;
 }
 //This functions will use check obstacles function
@@ -297,9 +250,9 @@ bool SecurityMargin::canIMove()
 {
     //refreshParams();
     bool ret = true;
+    publishRvizMarkers();
     if (status == 4) //Manual mode, ignoring security margin
     {
-        publishRvizMarkers();
         return ret;
     }
 
@@ -312,8 +265,6 @@ bool SecurityMargin::canIMove()
     if (checkObstacles())
     {
         ret = false;
-        std_srvs::Trigger trg;
-        stopMotorsSrv.call(trg);
     }
 
     if (stop_msg.data != !ret)
