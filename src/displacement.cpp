@@ -459,7 +459,7 @@ void Displacement::navigate()
 
         if (dist2GlobalGoal < 1 || ros::Time::now() - time_count < ros::Duration(2))
         {
-            //margin->setMode(1);
+            margin->setMode(1);
             std_msgs::Bool flg;
             flg.data = true;
             approach_man_pub.publish(flg);
@@ -478,7 +478,7 @@ void Displacement::navigate()
                 rotationInPlace(globalGoal.pose.orientation, 5);
             }
 
-            //margin->setMode(1);
+            margin->setMode(1);
         }
         else if (holonomic)
         {
@@ -547,7 +547,7 @@ void Displacement::publishCmdVel()
     if (Vx == 0 && Vy == 0 && Wz == 0)
         movingState.data = false;
 
-    if (!timeout)// && margin->canIMove())
+    if (!timeout && margin->canIMove())
     {
         if (navigationPaused)
         {
