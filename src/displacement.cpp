@@ -284,7 +284,7 @@ void Displacement::rotationInPlace(geometry_msgs::Quaternion finalOrientation, d
 
     //This give us the angular difference to the final orientation
     tf2Scalar shortest = tf2::angleShortestPath(robotQ, finalQ);
-    cout<<"Shortest: "<<shortest<<endl;
+    cout << "Shortest: " << shortest << endl;
     rotationInPlace(shortest, threshold_);
 }
 bool Displacement::rotationInPlace(tf2Scalar dYaw, double threshold_)
@@ -303,8 +303,8 @@ bool Displacement::rotationInPlace(tf2Scalar dYaw, double threshold_)
     }
 
     double var = static_cast<double>(dYaw); //radians
-    cout<<"Var: "<<var<<endl;
-    if (var * Todeg < threshold_)
+    cout << "Var: " << var << endl;
+    if (var * Todeg > threshold_)
     {
         Wz = getVel(angularMaxSpeed, a, var);
         return true;
@@ -355,9 +355,10 @@ void Displacement::moveNonHolon()
 
     if (fabs(angle2NextPoint) > d2rad(15)) //Rot in place
     {
+
         if (!backwards && validateRotInPlace())
         {
-            Wz = getVel(angularMaxSpeed, a, angle2NextPoint);
+            rotationInPlace(angle2NextPoint, 0);
         }
         else
         { //uh, go backwards
@@ -366,18 +367,18 @@ void Displacement::moveNonHolon()
                 backwards = true;
                 time_count = ros::Time::now();
             }
-            else if (ros::Time::now() - time_count > ros::Duration(15))
+            else if (ros::Time::now() - time_count > ros::Duration(15) && validateRotInPlace())
             {
                 backwards = false;
             }
             else if (fabs(angleBack) > d2rad(15))
             {
-                Wz = getVel(angularMaxSpeed / 2, a / 2, angleBack);
+                rotationInPlace(angleBack, 0);
             }
             else
             {
                 Vx = -getVel(linearMaxSpeed / 2, b / 2, dist2GlobalGoal);
-                Wz = getVel(angularMaxSpeed / 2, a / 2, angleBack);
+                rotationInPlace(angleBack, 0);
             }
         }
     }
@@ -385,7 +386,7 @@ void Displacement::moveNonHolon()
     {
         Vx = getVel(linearMaxSpeed, b, dist2GlobalGoal);
         Vy = 0;
-        Wz = getVel(angularMaxSpeed, a, angle2NextPoint);
+        rotationInPlace(angle2NextPoint, 0);
     }
 }
 void Displacement::navigate()
@@ -483,12 +484,10 @@ void Displacement::navigate()
         else if (holonomic)
         {
             moveHolon(getYawFromQuat(globalGoal.pose.orientation));
-           
         }
         else
         {
             moveNonHolon();
-            
         }
         publishCmdVel();
     }
