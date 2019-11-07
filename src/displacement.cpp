@@ -453,6 +453,7 @@ void Displacement::navigate()
 
         globalGoalPose = transformPose(globalGoal, world_frame, robot_frame);
         dist2GlobalGoal = euclideanDistance(globalGoalPose);
+
         angle2GlobalGoal = getYawFromQuat(globalGoal.pose.orientation);
         dist2goal.data = dist2GlobalGoal;
         dist2goal_pub.publish(dist2goal);
@@ -480,6 +481,8 @@ void Displacement::navigate()
             }
 
             margin->setMode(1);
+            if(dist2GlobalGoal < distMargin/3 && angle2GlobalGoal < 10)
+            setGoalReachedFlag(1);
         }
         else if (holonomic)
         {
