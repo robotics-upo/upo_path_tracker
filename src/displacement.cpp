@@ -123,7 +123,7 @@ Displacement::Displacement(ros::NodeHandle *n, tf2_ros::Buffer *tfBuffer_)
     Vx = Vy = Wz = 0;
     //Configure speed direction marker
 
-    speed.header.frame_id = "base_link";
+    speed.header.frame_id = robot_frame;
     speed.header.stamp = ros::Time();
     speed.ns = "path_tracker";
     speed.id = 1;
@@ -140,7 +140,7 @@ Displacement::Displacement(ros::NodeHandle *n, tf2_ros::Buffer *tfBuffer_)
     speed.color.g = 1.0;
     speed.color.r = 0.0;
 
-    rot_speed.header.frame_id = "base_link";
+    rot_speed.header.frame_id = robot_frame;
     rot_speed.header.stamp = ros::Time();
     rot_speed.ns = "path_tracker";
     rot_speed.id = 2;
