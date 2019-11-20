@@ -57,3 +57,9 @@ add_dependencies(nav_node ${PROJECT_NAME}_gencfg  ${catkin_EXPORTED_TARGETS}  ${
 add_executable(sfm_nav_node src/nav_node_sfm.cpp src/securityMargin.cpp src/sfmcontroller.cpp)
 target_link_libraries(sfm_nav_node ${catkin_LIBRARIES})
 add_dependencies(sfm_nav_node ${PROJECT_NAME}_gencfg ${catkin_EXPORTED_TARGETS}  ${${PROJECT_NAME}_EXPORTED_TARGETS})
+
+add_executable(nav_node_2 src/nav_node_2.cpp)
+add_library(displacement_2 src/displacement_2.cpp )
+add_dependencies(displacement_2 ${catkin_EXPORTED_TARGETS} ${${PROJECT_NAME}_EXPORTED_TARGETS})
+target_link_libraries(nav_node_2 ${catkin_LIBRARIES} displacement_2 security_margin )
+add_dependencies(nav_node_2 ${PROJECT_NAME}_gencfg  ${catkin_EXPORTED_TARGETS}  ${${PROJECT_NAME}_EXPORTED_TARGETS})
