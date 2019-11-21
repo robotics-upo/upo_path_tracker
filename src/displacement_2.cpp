@@ -50,7 +50,7 @@ PathTracker::PathTracker()
     phase1 = true;
     //Flags for internal states
     trajReceived = false;
-
+    //last_trj_stamp = ros::Time::now();
     Vx = Vy = Wz = 0;
     //Configure speed direction marker
     configureMarkers();
@@ -67,8 +67,9 @@ void PathTracker::computeGeometry()
 bool PathTracker::checkPathTimeout()
 {
     bool ret = false;
-    if (trajReceived && ros::Time::now() - last_trj_stamp < ros::Duration(2))
+    if (!trajReceived || ros::Time::now() - last_trj_stamp > ros::Duration(3))
     {
+        //ROS_INFO("PATH TIMEOUT");
         publishZeroVel();
         ret = true;
     }
@@ -90,7 +91,7 @@ void PathTracker::navigate()
         time_count = ros::Time::now();
         setGoalReachedFlag(0);
     }
-    if (checkPathTimeout() && (navigate_server_ptr->isActive() || !aproximated))
+    if (!checkPathTimeout() && (navigate_server_ptr->isActive() || !aproximated))
     {
         computeGeometry();
 
@@ -159,32 +160,39 @@ void PathTracker::moveNonHolon()
         ROS_INFO_THROTTLE(0.5, "angle to next point: %.2f", angle2NextPoint);
         if (fabs(angle2NextPoint) > d2rad(20)) //Rot in place
         {
-            if (!backwards && validateRotInPlace())
+            if (!backwards && (fabs(angle2NextPoint) < d2rad(65) || validateRotInPlace()))
             {
+                ROS_INFO("\t 1");
                 rotationInPlace(angle2NextPoint, 0);
+                Vx = 0;
             }
             else if (!backwards)
             {
-                ROS_INFO_THROTTLE(0.5, "Enabling backwards");
+                ROS_INFO("Enabling backwards");
                 backwards = true;
                 time_count = ros::Time::now();
             }
             else if (ros::Time::now() - time_count > ros::Duration(15) && validateRotInPlace()) //Reset backwards
             {
+                ROS_INFO("\t 2");
                 backwards = false;
             }
             else if (fabs(angleBack) > fabs(d2rad(15))) //Too much angular distance, do only rotation in place
             {
+                ROS_INFO("\t 3");
                 rotationInPlace(angleBack, 10);
+                Vx = 0;
             }
             else
             {
+                ROS_INFO("\t 4");
                 Vx = -getVel(linMaxSpeed / 2, b / 2, dist2GlobalGoal);
                 rotationInPlace(angleBack, 0);
             }
         }
         else
         {
+            ROS_INFO("\t 5");
             Vx = getVel(linMaxSpeed, b, dist2GlobalGoal);
             Vy = 0;
             rotationInPlace(angle2NextPoint, 0);
@@ -210,12 +218,14 @@ void PathTracker::moveNonHolon()
             {
                 ROS_INFO("OUT FASE 1");
                 phase2 = false;
+                Vx=0;
             }
             //Vx = getVel(globalGoalBlFrame.pose.position.x < 0 ? -linMaxSpeed : linMaxSpeed, b, dist2GlobalGoal);
         }
         else
         {
             ROS_INFO("2 FASE");
+           
             static geometry_msgs::PoseStamped robotPose;
             static tf2::Quaternion robotQ;
             static tf2::Matrix3x3 m;
@@ -233,35 +243,52 @@ void PathTracker::moveNonHolon()
 
             m.setRotation(robotQ);
             m.getEulerYPR(robotYaw, rpitch, rroll);
-            
+
             ROS_INFO("angle of GlobalGoal: %.2f, robotYaw: %.2f", angle2GlobalGoal, rad2d(robotYaw));
             static bool aprox_rot;
             static double rotval;
-             if( angle2GlobalGoal*rad2d(robotYaw) < 0 ){
-                 if(angle2GlobalGoal < 0 ){   
-                     rotval = (180+angle2GlobalGoal) + (180-rad2d(robotYaw));
-                 }else{
-                     rotval = -((180-angle2GlobalGoal) + (180+rad2d(robotYaw)));
-                     
-                 }  
-            }else{
-                    rotval =angle2GlobalGoal - rad2d(robotYaw);
-            }
-            if(rotval > fabs(180)){
-                if(rotval<0){
-                    rotval+=360;
-                }else{
-                    rotval-=360;
+            if (angle2GlobalGoal * rad2d(robotYaw) < 0)
+            {
+                if (angle2GlobalGoal < 0)
+                {
+                    rotval = (180 + angle2GlobalGoal) + (180 - rad2d(robotYaw));
                 }
-                                
+                else
+                {
+                    rotval = -((180 - angle2GlobalGoal) + (180 + rad2d(robotYaw)));
+                }
             }
-            ROS_WARN("Rotation value: %.2f",rotval);
-             aprox_rot = rotationInPlace(rotval, 5);
-            if (!aprox_rot)
+            else
+            {
+                rotval = angle2GlobalGoal - rad2d(robotYaw);
+            }
+            if (fabs(rotval) > 180)
+            {
+                if (rotval < 0)
+                {
+                    rotval += 360;
+                }
+                else
+                {
+                    rotval -= 360;
+                }
+            }
+            ROS_WARN("Rotation value: %.2f", rotval);
+            if (validateRotInPlace())
+            {
+                aprox_rot = rotationInPlace(d2rad(rotval), 5);
+                if (!aprox_rot)
+                {
+                    aproximated = true;
+                    setGoalReachedFlag(1);
+                    ROS_WARN("Aproximated");
+                }
+            }
+            else
             {
                 aproximated = true;
                 setGoalReachedFlag(1);
-                ROS_WARN("Aproximated");
+                ROS_WARN("Arrived but not aproximated");
             }
         }
     }
@@ -521,6 +548,7 @@ void PathTracker::publishZeroVel()
     vel.linear.y = Wz;
 
     publishMarkers();
+    //ROS_INFO("Publishing zero vel");
     twistPub.publish(vel);
 }
 void PathTracker::navGoalCb()
