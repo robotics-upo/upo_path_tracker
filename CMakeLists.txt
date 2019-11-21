@@ -37,9 +37,9 @@ include_directories(
 )
 
 
-add_executable(test_node src/test.cpp)
-target_link_libraries(test_node ${catkin_LIBRARIES}  )
-add_dependencies(test_node ${catkin_EXPORTED_TARGETS}  ${${PROJECT_NAME}_EXPORTED_TARGETS})
+#add_executable(test_node src/test.cpp)
+#target_link_libraries(test_node ${catkin_LIBRARIES}  )
+#add_dependencies(test_node ${catkin_EXPORTED_TARGETS}  ${${PROJECT_NAME}_EXPORTED_TARGETS})
 
 #add_executable(arco_path_tracker src/navigation.cpp)
 #target_link_libraries(arco_path_tracker ${catkin_LIBRARIES} navigator)
