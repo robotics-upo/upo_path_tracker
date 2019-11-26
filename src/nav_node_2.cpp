@@ -1,16 +1,16 @@
 
 #include <ros/ros.h>
-#include <navigator/displacement_2.hpp>
+#include <navigator/PathTracker.hpp>
 
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "nav_node_2");
 
 
-    Navigators::PathTracker tracker;
+    PathTracker tracker;
     //Displacement class subscribers
 
-    ros::Rate loop_rate(20);
+    ros::Rate loop_rate(10);
     while (ros::ok())
     {
         ros::spinOnce();

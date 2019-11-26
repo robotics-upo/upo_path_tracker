@@ -1,6 +1,6 @@
 
-#ifndef DISPLACEMENT_H_
-#define DISPLACEMENT_H_
+#ifndef PATHTRACKER_H_
+#define PATHTRACKER_H_
 
 #include <ros/ros.h>
 #include <geometry_msgs/Pose.h>
@@ -20,9 +20,9 @@
 
 #include <actionlib/server/simple_action_server.h>
 
-namespace Navigators
+#include <dynamic_reconfigure/server.h>
+#include <arco_path_tracker/PathTrackerConfig.h>
 
-{
 
 class PathTracker
 {
@@ -35,7 +35,7 @@ public:
     void navigate();
 
 private:
-
+    void dynReconfCb(arco_path_tracker::PathTrackerConfig &config, uint32_t level);
     void computeGeometry();
     bool checkPathTimeout();
     void publishMarkers();
@@ -155,7 +155,10 @@ private:
 
     //angular parameters
     double angle1, angle2, angle3;
+
+    //Dyn reconfg
+    std::unique_ptr<dynamic_reconfigure::Server<arco_path_tracker::PathTrackerConfig>> server;
+    std::unique_ptr<dynamic_reconfigure::Server<arco_path_tracker::PathTrackerConfig>::CallbackType> f;
 };
-} // namespace Navigators
 
 #endif /* DISPLACEMENT_H_ */

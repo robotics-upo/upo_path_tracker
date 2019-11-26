@@ -1,7 +1,21 @@
-#include <navigator/displacement_2.hpp>
+#include <navigator/PathTracker.hpp>
 
-namespace Navigators
+
+void PathTracker::dynReconfCb(arco_path_tracker::PathTrackerConfig &config, uint32_t level)
 {
+    this->angle1 = config.angle1;
+    this->angle2 = config.angle2;
+    this->angle3 = config.angle3;
+
+    this->holon = config.holonomic;
+    this->doNavigate = config.do_navigate;
+    this->angMaxSpeed = config.angular_max_speed;
+    this->linMaxSpeed = config.linear_max_speed;
+    this->distMargin = config.dist_margin;
+    this->a = config.a;
+    this->b = config.b;
+
+}
 PathTracker::PathTracker()
 {
 
@@ -10,6 +24,12 @@ PathTracker::PathTracker()
     margin.reset(new SecurityMargin);
     tfBuffer.reset(new tf2_ros::Buffer);
     tf2_list.reset(new tf2_ros::TransformListener(*tfBuffer));
+
+    server.reset(new dynamic_reconfigure::Server<arco_path_tracker::PathTrackerConfig>);
+    f.reset(new dynamic_reconfigure::Server<arco_path_tracker::PathTrackerConfig>::CallbackType);
+
+    *f = boost::bind(&PathTracker::dynReconfCb, this, _1, _2);
+    server->setCallback(*f);
 
     nh->param("debug", debug, (bool)true);
     nh->param("do_navigate", doNavigate, (bool)true);
@@ -24,9 +44,9 @@ PathTracker::PathTracker()
     nh->param("robot_base_frame", robot_frame, (string) "base_link");
     nh->param("world_frame", world_frame, (string) "map");
 
-    nh->param("angle1", angle1, (double) 20);
-    nh->param("angle2", angle2, (double) 65);
-    nh->param("angle3", angle3, (double) 15);
+    nh->param("angle1", angle1, (double)20);
+    nh->param("angle2", angle2, (double)65);
+    nh->param("angle3", angle3, (double)15);
 
     //Publishers, only twist and markers
     twistPub = nh->advertise<geometry_msgs::Twist>("/cmd_vel", 1);
@@ -48,7 +68,7 @@ PathTracker::PathTracker()
     //Service to check if it's possible a rotation in place consulting the costmap
     check_rot_srv = nh->serviceClient<std_srvs::Trigger>("/custom_costmap_node/check_env");
 
-    backwards=false;
+    backwards = false;
     recoveryRotation = false;
     aproximated = false;
     phase2 = true;
@@ -223,14 +243,14 @@ void PathTracker::moveNonHolon()
             {
                 ROS_INFO("OUT FASE 1");
                 phase2 = false;
-                Vx=0;
+                Vx = 0;
             }
             //Vx = getVel(globalGoalBlFrame.pose.position.x < 0 ? -linMaxSpeed : linMaxSpeed, b, dist2GlobalGoal);
         }
         else
         {
             ROS_INFO("2 FASE");
-           
+
             static geometry_msgs::PoseStamped robotPose;
             static tf2::Quaternion robotQ;
             static tf2::Matrix3x3 m;
@@ -447,7 +467,7 @@ void PathTracker::setGoalReachedFlag(bool status_)
     else if (!status_ && navigate_result.arrived)
     {
         navigate_result.arrived = false;
-        backwards = false
+        backwards = false;
         aproximated = false;
         phase2 = true;
         phase1 = true;
@@ -613,4 +633,3 @@ float PathTracker::getYawFromQuat(geometry_msgs::Quaternion quat)
 
     return y / M_PI * 180;
 }
-} // namespace Navigators
