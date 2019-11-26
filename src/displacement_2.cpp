@@ -24,6 +24,10 @@ PathTracker::PathTracker()
     nh->param("robot_base_frame", robot_frame, (string) "base_link");
     nh->param("world_frame", world_frame, (string) "map");
 
+    nh->param("angle1", angle1, (double) 20);
+    nh->param("angle2", angle2, (double) 65);
+    nh->param("angle3", angle3, (double) 15);
+
     //Publishers, only twist and markers
     twistPub = nh->advertise<geometry_msgs::Twist>("/cmd_vel", 1);
     markersPub = nh->advertise<visualization_msgs::Marker>("speedMarker", 2);
@@ -44,6 +48,7 @@ PathTracker::PathTracker()
     //Service to check if it's possible a rotation in place consulting the costmap
     check_rot_srv = nh->serviceClient<std_srvs::Trigger>("/custom_costmap_node/check_env");
 
+    backwards=false;
     recoveryRotation = false;
     aproximated = false;
     phase2 = true;
@@ -158,9 +163,9 @@ void PathTracker::moveNonHolon()
         ROS_INFO_THROTTLE(0.5, "Angle Back: %.2f", angleBack);
         ROS_INFO_THROTTLE(0.5, "Backwards: %d", backwards);
         ROS_INFO_THROTTLE(0.5, "angle to next point: %.2f", angle2NextPoint);
-        if (fabs(angle2NextPoint) > d2rad(20)) //Rot in place
+        if (fabs(angle2NextPoint) > d2rad(angle1)) //Rot in place
         {
-            if (!backwards && (fabs(angle2NextPoint) < d2rad(65) || validateRotInPlace()))
+            if (!backwards && (fabs(angle2NextPoint) < d2rad(angle2) || validateRotInPlace()))
             {
                 ROS_INFO("\t 1");
                 rotationInPlace(angle2NextPoint, 0);
@@ -177,10 +182,10 @@ void PathTracker::moveNonHolon()
                 ROS_INFO("\t 2");
                 backwards = false;
             }
-            else if (fabs(angleBack) > fabs(d2rad(15))) //Too much angular distance, do only rotation in place
+            else if (fabs(angleBack) > fabs(d2rad(angle3))) //Too much angular distance, do only rotation in place
             {
                 ROS_INFO("\t 3");
-                rotationInPlace(angleBack, 10);
+                rotationInPlace(angleBack, 0);
                 Vx = 0;
             }
             else
@@ -442,6 +447,7 @@ void PathTracker::setGoalReachedFlag(bool status_)
     else if (!status_ && navigate_result.arrived)
     {
         navigate_result.arrived = false;
+        backwards = false
         aproximated = false;
         phase2 = true;
         phase1 = true;

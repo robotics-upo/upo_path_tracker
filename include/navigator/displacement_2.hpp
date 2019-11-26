@@ -152,6 +152,9 @@ private:
     upo_actions::RotationInPlaceResult rot_result;
     upo_actions::RotationInPlaceGoalConstPtr rot_inplace;
     upo_actions::RotationInPlaceActionFeedback rotation_fb;
+
+    //angular parameters
+    double angle1, angle2, angle3;
 };
 } // namespace Navigators
 
