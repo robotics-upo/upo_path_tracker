@@ -92,7 +92,7 @@ void PathTracker::computeGeometry()
 bool PathTracker::checkPathTimeout()
 {
     bool ret = false;
-    if (!trajReceived || ros::Time::now() - last_trj_stamp > ros::Duration(3))
+    if (!trajReceived || ros::Time::now() - last_trj_stamp > ros::Duration(2))
     {
         //ROS_INFO("PATH TIMEOUT");
         publishZeroVel();
@@ -106,6 +106,7 @@ void PathTracker::navigate()
     {
         rot_inplace = rot_server_ptr->acceptNewGoal();
     }
+
     if (navigate_server_ptr->isNewGoalAvailable())
     {
         ROS_INFO("Accepting new goal ");
