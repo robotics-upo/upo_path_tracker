@@ -112,7 +112,7 @@ private:
     
     //Input config params
     bool debug, doNavigate, holon, phase1, phase2;
-    double angMaxSpeed, linMaxSpeed, angleMargin, distMargin, a, b, orientDist;
+    double angMaxSpeed, linMaxSpeed,linMaxSpeedBack, angleMargin, distMargin, a, b,bBack, orientDist;
     std::string robot_frame, world_frame;
 
     //Variables

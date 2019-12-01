@@ -13,6 +13,8 @@ void PathTracker::dynReconfCb(arco_path_tracker::PathTrackerConfig &config, uint
     this->distMargin = config.dist_margin;
     this->a = config.a;
     this->b = config.b;
+    this->bBack = config.b_back;
+    this->linMaxSpeedBack = config.linear_max_speed_back;
 }
 PathTracker::PathTracker()
 {
@@ -34,10 +36,12 @@ PathTracker::PathTracker()
     nh->param("holonomic", holon, (bool)true);
     nh->param("angular_max_speed", angMaxSpeed, (double)0.5);
     nh->param("linear_max_speed", linMaxSpeed, (double)0.3);
+    nh->param("linear_max_speed_back", linMaxSpeedBack, (double)0.3);
     nh->param("angle_margin", angleMargin, (double)10);
     nh->param("dist_margin", distMargin, (double)0.35);
     nh->param("a", a, (double)5);
     nh->param("b", b, (double)5);
+    nh->param("b_back", bBack, (double)5);
     nh->param("start_orientate_dist", orientDist, (double)0.5);
     nh->param("robot_base_frame", robot_frame, (string) "base_link");
     nh->param("world_frame", world_frame, (string) "map");
@@ -210,7 +214,7 @@ void PathTracker::moveNonHolon()
             else
             {
                 ROS_INFO("\t 4");
-                Vx = -getVel(linMaxSpeed / 2, b / 2, dist2GlobalGoal);
+                Vx = -getVel(linMaxSpeedBack / 1.2, bBack / 2, dist2GlobalGoal);
                 rotationInPlace(angleBack, 0);
             }
         }
