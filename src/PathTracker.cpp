@@ -1,6 +1,5 @@
 #include <navigator/PathTracker.hpp>
 
-
 void PathTracker::dynReconfCb(arco_path_tracker::PathTrackerConfig &config, uint32_t level)
 {
     this->angle1 = config.angle1;
@@ -14,7 +13,6 @@ void PathTracker::dynReconfCb(arco_path_tracker::PathTrackerConfig &config, uint
     this->distMargin = config.dist_margin;
     this->a = config.a;
     this->b = config.b;
-
 }
 PathTracker::PathTracker()
 {
@@ -583,6 +581,16 @@ void PathTracker::navGoalCb()
 }
 void PathTracker::navPreemptCb()
 {
+    navigate_server_ptr->setPreempted();
+    backwards = false;
+    recoveryRotation = false;
+    aproximated = false;
+    phase2 = true;
+    phase1 = true;
+    //Flags for internal states
+    trajReceived = false;
+    //last_trj_stamp = ros::Time::now();
+    Vx = Vy = Wz = 0;
 }
 void PathTracker::rotGoalCb()
 {
