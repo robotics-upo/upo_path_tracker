@@ -155,7 +155,7 @@ private:
 
     //angular parameters
     double angle1, angle2, angle3;
-
+    std::string ns_ugv;
     //Dyn reconfg
     std::unique_ptr<dynamic_reconfigure::Server<arco_path_tracker::PathTrackerConfig>> server;
     std::unique_ptr<dynamic_reconfigure::Server<arco_path_tracker::PathTrackerConfig>::CallbackType> f;

@@ -34,14 +34,14 @@ PathTracker::PathTracker()
     nh->param("debug", debug, (bool)true);
     nh->param("do_navigate", doNavigate, (bool)true);
     nh->param("holonomic", holon, (bool)true);
-    nh->param("angular_max_speed", angMaxSpeed, (double)0.5);
-    nh->param("linear_max_speed", linMaxSpeed, (double)0.3);
-    nh->param("linear_max_speed_back", linMaxSpeedBack, (double)0.3);
+    nh->param("angular_max_speed", angMaxSpeed, (double)0.4);
+    nh->param("linear_max_speed", linMaxSpeed, (double)0.2);
+    nh->param("linear_max_speed_back", linMaxSpeedBack, (double)0.2);
     nh->param("angle_margin", angleMargin, (double)10);
     nh->param("dist_margin", distMargin, (double)0.35);
-    nh->param("a", a, (double)5);
-    nh->param("b", b, (double)5);
-    nh->param("b_back", bBack, (double)5);
+    nh->param("a", a, (double)0.5);
+    nh->param("b", b, (double)0.5);
+    nh->param("b_back", bBack, (double)0.5);
     nh->param("start_orientate_dist", orientDist, (double)0.5);
     nh->param("robot_base_frame", robot_frame, (string) "base_link");
     nh->param("world_frame", world_frame, (string) "map");
@@ -49,6 +49,7 @@ PathTracker::PathTracker()
     nh->param("angle1", angle1, (double)20);
     nh->param("angle2", angle2, (double)65);
     nh->param("angle3", angle3, (double)15);
+    nh->param("/ns_ugv",ns_ugv, (std::string) "" );
 
     //Publishers, only twist and markers
     twistPub = nh->advertise<geometry_msgs::Twist>("/cmd_vel", 1);
@@ -56,7 +57,8 @@ PathTracker::PathTracker()
 
     localPathSub = nh->subscribe<trajectory_msgs::MultiDOFJointTrajectory>("/local_planner_node/local_path", 2, &PathTracker::localPathCb, this);
     //Navigate action server configuration
-    navigate_server_ptr.reset(new NavigateServer(*nh, "/Navigation", false));
+    std::string server_name="/"+ns_ugv+"/Navigation";
+    navigate_server_ptr.reset(new NavigateServer(*nh,server_name.c_str(), false));
     navigate_server_ptr->registerGoalCallback(boost::bind(&PathTracker::navGoalCb, this));
     navigate_server_ptr->registerPreemptCallback(boost::bind(&PathTracker::navPreemptCb, this));
     navigate_server_ptr->start();
