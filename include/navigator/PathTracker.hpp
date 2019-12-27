@@ -22,7 +22,11 @@
 
 #include <dynamic_reconfigure/server.h>
 #include <arco_path_tracker/PathTrackerConfig.h>
+#include <upo_actions/ExecuteMissionActionFeedback.h>
 
+
+#define RAMP_START 3
+#define RAMP_END 4
 
 class PathTracker
 {
@@ -35,6 +39,8 @@ public:
     void navigate();
 
 private:
+    
+    void moveForward();
     void dynReconfCb(arco_path_tracker::PathTrackerConfig &config, uint32_t level);
     void computeGeometry();
     bool checkPathTimeout();
@@ -44,14 +50,14 @@ private:
     void moveNonHolon();
 
     void setRobotOrientation(float finalYaw, bool goal, bool pub, float speed, float angleMargin_);
-    bool rotationInPlace(geometry_msgs::Quaternion finalOrientation, double threshold_);
-    bool rotationInPlace(tf2Scalar dYaw, double threshold_);
+    bool rotationInPlace(geometry_msgs::Quaternion finalOrientation, double threshold_, bool final);
+    bool rotationInPlace(tf2Scalar dYaw, double threshold_, bool final);
     bool validateRotInPlace();
 
     void publishZeroVel();
     void publishCmdVel();
     void configureMarkers();
-
+    void missionFbCb(const upo_actions::ExecuteMissionActionFeedbackConstPtr &fb);
     //Callbacks
     void localPathCb(const trajectory_msgs::MultiDOFJointTrajectoryConstPtr &msg);
 
@@ -118,7 +124,7 @@ private:
     //Variables
     //tf2::Quaternion robotQ, finalQ, q_rot, q_f;
     //Speed
-    double Vx, Vy, Wz;
+    double Vx, Vy, Wz,ramp_speed;
     double angle2NextPoint, dist2GlobalGoal, angle2GlobalGoal, dist2NextPoint,angleBack;
     geometry_msgs::Twist vel;
 
@@ -133,7 +139,7 @@ private:
     std::unique_ptr<tf2_ros::TransformListener> tf2_list;
 
     ros::Publisher twistPub, markersPub;
-    ros::Subscriber localPathSub;
+    ros::Subscriber localPathSub,missionFbSub;
     ros::ServiceClient check_rot_srv;
 
     //Markers for RViz
@@ -159,6 +165,8 @@ private:
     //Dyn reconfg
     std::unique_ptr<dynamic_reconfigure::Server<arco_path_tracker::PathTrackerConfig>> server;
     std::unique_ptr<dynamic_reconfigure::Server<arco_path_tracker::PathTrackerConfig>::CallbackType> f;
+
+    bool rampMode;
 };
 
 #endif /* DISPLACEMENT_H_ */

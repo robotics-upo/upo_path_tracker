@@ -36,6 +36,7 @@ PathTracker::PathTracker()
     nh->param("holonomic", holon, (bool)true);
     nh->param("angular_max_speed", angMaxSpeed, (double)0.4);
     nh->param("linear_max_speed", linMaxSpeed, (double)0.2);
+    nh->param("ramp_speed", ramp_speed, (double)0.1);
     nh->param("linear_max_speed_back", linMaxSpeedBack, (double)0.2);
     nh->param("angle_margin", angleMargin, (double)10);
     nh->param("dist_margin", distMargin, (double)0.35);
@@ -49,16 +50,17 @@ PathTracker::PathTracker()
     nh->param("angle1", angle1, (double)20);
     nh->param("angle2", angle2, (double)65);
     nh->param("angle3", angle3, (double)15);
-    nh->param("/ns_ugv",ns_ugv, (std::string) "" );
+    nh->param("/ns_ugv", ns_ugv, (std::string) "");
 
     //Publishers, only twist and markers
     twistPub = nh->advertise<geometry_msgs::Twist>("/cmd_vel", 1);
     markersPub = nh->advertise<visualization_msgs::Marker>("speedMarker", 2);
 
     localPathSub = nh->subscribe<trajectory_msgs::MultiDOFJointTrajectory>("/local_planner_node/local_path", 2, &PathTracker::localPathCb, this);
+    missionFbSub = nh->subscribe<upo_actions::ExecuteMissionActionFeedback>("/Execute_Mission/feedback", 1, &PathTracker::missionFbCb, this);
     //Navigate action server configuration
-    std::string server_name="/"+ns_ugv+"/Navigation";
-    navigate_server_ptr.reset(new NavigateServer(*nh,server_name.c_str(), false));
+    std::string server_name = "/" + ns_ugv + "/Navigation";
+    navigate_server_ptr.reset(new NavigateServer(*nh, server_name.c_str(), false));
     navigate_server_ptr->registerGoalCallback(boost::bind(&PathTracker::navGoalCb, this));
     navigate_server_ptr->registerPreemptCallback(boost::bind(&PathTracker::navPreemptCb, this));
     navigate_server_ptr->start();
@@ -83,6 +85,20 @@ PathTracker::PathTracker()
     Vx = Vy = Wz = 0;
     //Configure speed direction marker
     configureMarkers();
+}
+void PathTracker::missionFbCb(const upo_actions::ExecuteMissionActionFeedbackConstPtr &fb)
+{
+    if (fb->feedback.waypoint_type.data == RAMP_END)
+    {
+        ROS_WARN("START RAMP");
+        rampMode = true;
+    }
+    else
+    {
+        ROS_WARN("FINISH RAMP");
+        rampMode = false;
+    }
+
 }
 void PathTracker::computeGeometry()
 {
@@ -129,13 +145,25 @@ void PathTracker::navigate()
         {
             margin->setMode(1);
         }
-
-        moveNonHolon();
+        if(!rampMode){
+            moveNonHolon();
+        }else{
+            moveForward();
+        }
 
         publishCmdVel();
     }
 }
-
+void PathTracker::moveForward(){
+    Vx=ramp_speed;
+    Wz=0;
+    if(dist2GlobalGoal < 0.2){
+         aproximated = true;
+        setGoalReachedFlag(1);
+    }else{
+        publishCmdVel();
+    }
+}
 void PathTracker::publishCmdVel()
 {
     if (1) //margin->canIMove())
@@ -193,7 +221,7 @@ void PathTracker::moveNonHolon()
             if (!backwards && (fabs(angle2NextPoint) < d2rad(angle2) || validateRotInPlace()))
             {
                 ROS_INFO("\t 1");
-                rotationInPlace(angle2NextPoint, 0);
+                rotationInPlace(angle2NextPoint, 0, true);
                 Vx = 0;
             }
             else if (!backwards)
@@ -210,14 +238,14 @@ void PathTracker::moveNonHolon()
             else if (fabs(angleBack) > fabs(d2rad(angle3))) //Too much angular distance, do only rotation in place
             {
                 ROS_INFO("\t 3");
-                rotationInPlace(angleBack, 0);
+                rotationInPlace(angleBack, 0, true);
                 Vx = 0;
             }
             else
             {
                 ROS_INFO("\t 4");
                 Vx = -getVel(linMaxSpeedBack / 1.2, bBack / 2, dist2GlobalGoal);
-                rotationInPlace(angleBack, 0);
+                rotationInPlace(angleBack, 0, false);
             }
         }
         else
@@ -225,7 +253,7 @@ void PathTracker::moveNonHolon()
             ROS_INFO("\t 5");
             Vx = getVel(linMaxSpeed, b, dist2GlobalGoal);
             Vy = 0;
-            rotationInPlace(angle2NextPoint, 0);
+            rotationInPlace(angle2NextPoint, 0, false);
         }
     }
     else if (!aproximated)
@@ -306,7 +334,7 @@ void PathTracker::moveNonHolon()
             ROS_WARN("Rotation value: %.2f", rotval);
             if (validateRotInPlace())
             {
-                aprox_rot = rotationInPlace(d2rad(rotval), 5);
+                aprox_rot = rotationInPlace(d2rad(rotval), 5, true);
                 if (!aprox_rot)
                 {
                     aproximated = true;
@@ -347,7 +375,7 @@ void PathTracker::moveHolon(double finalYaw)
         setRobotOrientation(finalYaw, 0, 0, angMaxSpeed, 0);
 }
 
-bool PathTracker::rotationInPlace(geometry_msgs::Quaternion finalOrientation, double threshold_)
+bool PathTracker::rotationInPlace(geometry_msgs::Quaternion finalOrientation, double threshold_, bool final = false)
 {
     static geometry_msgs::PoseStamped robotPose;
     static tf2::Quaternion finalQ, robotQ;
@@ -368,9 +396,9 @@ bool PathTracker::rotationInPlace(geometry_msgs::Quaternion finalOrientation, do
     double sh = static_cast<double>(shortest);
     cout << "Shortest: " << sh << endl;
 
-    return rotationInPlace(shortest, threshold_);
+    return rotationInPlace(shortest, threshold_, final);
 }
-bool PathTracker::rotationInPlace(tf2Scalar dYaw, double threshold_)
+bool PathTracker::rotationInPlace(tf2Scalar dYaw, double threshold_, bool final = false)
 {
     static tf2::Quaternion q_rot, q_f, robotQ;
     static geometry_msgs::PoseStamped robotPose;
@@ -401,7 +429,7 @@ bool PathTracker::rotationInPlace(tf2Scalar dYaw, double threshold_)
     if (fabs(rad2d(var)) > threshold_)
     {
 
-        Wz = getVel(angMaxSpeed, a, var);
+        Wz = getVel(angMaxSpeed, final ? a / 2 : a, var);
 
         return true;
     }
