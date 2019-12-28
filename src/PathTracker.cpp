@@ -81,6 +81,7 @@ PathTracker::PathTracker()
     phase1 = true;
     //Flags for internal states
     trajReceived = false;
+    rampMode=false;
     //last_trj_stamp = ros::Time::now();
     Vx = Vy = Wz = 0;
     //Configure speed direction marker
@@ -93,7 +94,7 @@ void PathTracker::missionFbCb(const upo_actions::ExecuteMissionActionFeedbackCon
         ROS_WARN("START RAMP");
         rampMode = true;
     }
-    else
+    else if(rampMode)
     {
         ROS_WARN("FINISH RAMP");
         rampMode = false;
@@ -250,7 +251,7 @@ void PathTracker::moveNonHolon()
         }
         else
         {
-            ROS_INFO("\t 5");
+            // ROS_INFO("\t 5");
             Vx = getVel(linMaxSpeed, b, dist2GlobalGoal);
             Vy = 0;
             rotationInPlace(angle2NextPoint, 0, false);
@@ -262,15 +263,17 @@ void PathTracker::moveNonHolon()
             phase1 = false;
         //setGoalReachedFlag(1);
         if (phase2) //&& !rotationInPlace(angle2GlobalGoal, 5))
-        {
+        {   
+            Wz=0;
             ROS_INFO("Fase 1");
+            
             if (globalGoalBlFrame.pose.position.x > 0 && globalGoalBlFrame.pose.position.x < 0.1)
             {
-                Vx = 0.05;
+                Vx = 0.01;
             }
             else if (globalGoalBlFrame.pose.position.x < 0 && globalGoalBlFrame.pose.position.x > -0.1)
             {
-                Vx = -0.05;
+                Vx = -0.01;
             }
             else
             {
@@ -425,7 +428,7 @@ bool PathTracker::rotationInPlace(tf2Scalar dYaw, double threshold_, bool final 
 
     static double var;
     var = static_cast<double>(dYaw); //radians
-    cout << "Rotation var: " << rad2d(var) << endl;
+    // cout << "Rotation var: " << rad2d(var) << endl;
     if (fabs(rad2d(var)) > threshold_)
     {
 
