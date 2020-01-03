@@ -195,7 +195,7 @@ bool PathTracker::validateRotInPlace()
     bool ret = false;
     std_srvs::Trigger srv;
     check_rot_srv.call(srv);
-    ROS_WARN("Validate rotation requested: %s", srv.response.message.c_str());
+    ROS_INFO("Validate rotation requested: %s", srv.response.message.c_str());
     if (srv.response.success)
         return true;
 
@@ -231,7 +231,7 @@ void PathTracker::moveNonHolon()
                 backwards = true;
                 time_count = ros::Time::now();
             }
-            else if (ros::Time::now() - time_count > ros::Duration(15) && validateRotInPlace()) //Reset backwards
+            else if (ros::Time::now() - time_count > ros::Duration(20) && validateRotInPlace()) //Reset backwards
             {
                 ROS_INFO("\t 2");
                 backwards = false;
@@ -245,7 +245,7 @@ void PathTracker::moveNonHolon()
             else
             {
                 ROS_INFO("\t 4");
-                Vx = -getVel(linMaxSpeedBack / 1.2, bBack / 2, dist2GlobalGoal);
+                Vx = -getVel(linMaxSpeedBack, bBack , dist2GlobalGoal);
                 rotationInPlace(angleBack, 0, false);
             }
         }
@@ -334,7 +334,7 @@ void PathTracker::moveNonHolon()
                     rotval -= 360;
                 }
             }
-            ROS_WARN("Rotation value: %.2f", rotval);
+            ROS_INFO("Rotation value: %.2f", rotval);
             if (validateRotInPlace())
             {
                 aprox_rot = rotationInPlace(d2rad(rotval), 5, true);
@@ -342,7 +342,7 @@ void PathTracker::moveNonHolon()
                 {
                     aproximated = true;
                     setGoalReachedFlag(1);
-                    ROS_WARN("Aproximated");
+                    ROS_INFO("Aproximated");
                 }
             }
             else
@@ -431,8 +431,11 @@ bool PathTracker::rotationInPlace(tf2Scalar dYaw, double threshold_, bool final 
     // cout << "Rotation var: " << rad2d(var) << endl;
     if (fabs(rad2d(var)) > threshold_)
     {
+        double bias = 0.2;
+        if(var < 0)
+            bias*=-1;
 
-        Wz = getVel(angMaxSpeed, final ? a / 2 : a, var);
+        Wz = getVel(final?angMaxSpeed+0.05:angMaxSpeed, final ? a / 2 : a, var); //TODO poner el 0.2 como parametro
 
         return true;
     }
