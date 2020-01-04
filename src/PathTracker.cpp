@@ -30,7 +30,8 @@ PathTracker::PathTracker()
 
     *f = boost::bind(&PathTracker::dynReconfCb, this, _1, _2);
     server->setCallback(*f);
-
+    costmap_clean_srv = nh->serviceClient<std_srvs::Trigger>("/custom_costmap_node/reset_costmap");
+    
     nh->param("debug", debug, (bool)true);
     nh->param("do_navigate", doNavigate, (bool)true);
     nh->param("holonomic", holon, (bool)true);
@@ -51,6 +52,8 @@ PathTracker::PathTracker()
     nh->param("angle2", angle2, (double)65);
     nh->param("angle3", angle3, (double)15);
     nh->param("/ns_ugv", ns_ugv, (std::string) "");
+    nh->param("rot_thresh", rot_thresh, (int) 350);
+    nh->param("dist_aprox1", dist_aprox1,(double)0.05);
 
     //Publishers, only twist and markers
     twistPub = nh->advertise<geometry_msgs::Twist>("/cmd_vel", 1);
@@ -72,7 +75,7 @@ PathTracker::PathTracker()
     rot_server_ptr->start();
 
     //Service to check if it's possible a rotation in place consulting the costmap
-    check_rot_srv = nh->serviceClient<std_srvs::Trigger>("/custom_costmap_node/check_env");
+    check_rot_srv = nh->serviceClient<theta_star_2d::checkObstacles>("/custom_costmap_node/check_env");
 
     backwards = false;
     recoveryRotation = false;
@@ -113,9 +116,9 @@ void PathTracker::computeGeometry()
 bool PathTracker::checkPathTimeout()
 {
     bool ret = false;
-    if (!trajReceived || ros::Time::now() - last_trj_stamp > ros::Duration(2))
+    if ( navigate_server_ptr->isActive() && !trajReceived || ros::Time::now() - last_trj_stamp > ros::Duration(2))
     {
-        //ROS_INFO("PATH TIMEOUT");
+        ROS_INFO("PATH TIMEOUT");
         publishZeroVel();
         ret = true;
     }
@@ -190,13 +193,17 @@ void PathTracker::publishCmdVel()
     }
 }
 //TODO Implement
-bool PathTracker::validateRotInPlace()
+bool PathTracker::validateRotInPlace(int thresh)
 {
     bool ret = false;
-    std_srvs::Trigger srv;
-    check_rot_srv.call(srv);
-    ROS_INFO("Validate rotation requested: %s", srv.response.message.c_str());
-    if (srv.response.success)
+    
+    theta_star_2d::checkObstacles trg;
+   
+    trg.request.thresh.data=thresh;
+
+    check_rot_srv.call(trg);
+    ROS_INFO("Validate rotation requested: %s", trg.response.message.c_str());
+    if (trg.response.success)
         return true;
 
     return ret;
@@ -231,7 +238,7 @@ void PathTracker::moveNonHolon()
                 backwards = true;
                 time_count = ros::Time::now();
             }
-            else if (ros::Time::now() - time_count > ros::Duration(20) && validateRotInPlace()) //Reset backwards
+            else if (ros::Time::now() - time_count > ros::Duration(100) && validateRotInPlace()) //Reset backwards
             {
                 ROS_INFO("\t 2");
                 backwards = false;
@@ -259,19 +266,23 @@ void PathTracker::moveNonHolon()
     }
     else if (!aproximated)
     {
-        if (phase1)
+
+        if (phase1){
             phase1 = false;
+            std_srvs::Trigger trg;
+            costmap_clean_srv.call(trg);
+        }
         //setGoalReachedFlag(1);
         if (phase2) //&& !rotationInPlace(angle2GlobalGoal, 5))
         {   
             Wz=0;
             ROS_INFO("Fase 1");
             
-            if (globalGoalBlFrame.pose.position.x > 0 && globalGoalBlFrame.pose.position.x < 0.1)
+            if (globalGoalBlFrame.pose.position.x > 0 && globalGoalBlFrame.pose.position.x < dist_aprox1)
             {
                 Vx = 0.01;
             }
-            else if (globalGoalBlFrame.pose.position.x < 0 && globalGoalBlFrame.pose.position.x > -0.1)
+            else if (globalGoalBlFrame.pose.position.x < 0 && globalGoalBlFrame.pose.position.x > -dist_aprox1)
             {
                 Vx = -0.01;
             }
@@ -335,7 +346,7 @@ void PathTracker::moveNonHolon()
                 }
             }
             ROS_INFO("Rotation value: %.2f", rotval);
-            if (validateRotInPlace())
+            if (validateRotInPlace(rot_thresh))
             {
                 aprox_rot = rotationInPlace(d2rad(rotval), 5, true);
                 if (!aprox_rot)

@@ -14,6 +14,7 @@
 #include <trajectory_msgs/MultiDOFJointTrajectory.h>
 
 #include <navigator/securityMargin.hpp>
+#include <theta_star_2d/checkObstacles.h>
 
 #include <upo_actions/NavigateAction.h>
 #include <upo_actions/RotationInPlaceAction.h>
@@ -23,7 +24,6 @@
 #include <dynamic_reconfigure/server.h>
 #include <arco_path_tracker/PathTrackerConfig.h>
 #include <upo_actions/ExecuteMissionActionFeedback.h>
-
 
 #define RAMP_START 3
 #define RAMP_END 4
@@ -52,7 +52,7 @@ private:
     void setRobotOrientation(float finalYaw, bool goal, bool pub, float speed, float angleMargin_);
     bool rotationInPlace(geometry_msgs::Quaternion finalOrientation, double threshold_, bool final);
     bool rotationInPlace(tf2Scalar dYaw, double threshold_, bool final);
-    bool validateRotInPlace();
+    bool validateRotInPlace(int thresh=0);
 
     void publishZeroVel();
     void publishCmdVel();
@@ -167,6 +167,9 @@ private:
     std::unique_ptr<dynamic_reconfigure::Server<arco_path_tracker::PathTrackerConfig>::CallbackType> f;
 
     bool rampMode;
+    ros::ServiceClient costmap_clean_srv;
+    int rot_thresh;
+    double dist_aprox1;
 };
 
 #endif /* DISPLACEMENT_H_ */
