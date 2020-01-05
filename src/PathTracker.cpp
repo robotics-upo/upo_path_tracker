@@ -442,10 +442,12 @@ bool PathTracker::rotationInPlace(tf2Scalar dYaw, double threshold_, bool final 
     // cout << "Rotation var: " << rad2d(var) << endl;
     if (fabs(rad2d(var)) > threshold_)
     {
-        double bias = 0.2;
-        if(var < 0)
-            bias*=-1;
-
+        if(rad2d(var) > 90){
+            var=M_PI_2;
+        }else if(rad2d(var) < -90){
+            var=-M_PI_2;
+        }
+        
         Wz = getVel(final?angMaxSpeed+0.05:angMaxSpeed, final ? a / 2 : a, var); //TODO poner el 0.2 como parametro
 
         return true;
