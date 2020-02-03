@@ -76,7 +76,7 @@ PathTracker::PathTracker()
 
     //Service to check if it's possible a rotation in place consulting the costmap
     check_rot_srv = nh->serviceClient<theta_star_2d::checkObstacles>("/custom_costmap_node/check_env");
-
+    ROS_INFO("CONFIGURED");
     backwards = false;
     recoveryRotation = false;
     aproximated = false;
@@ -85,7 +85,7 @@ PathTracker::PathTracker()
     //Flags for internal states
     trajReceived = false;
     rampMode=false;
-    //last_trj_stamp = ros::Time::now();
+    last_trj_stamp = ros::Time(1,1);
     Vx = Vy = Wz = 0;
     //Configure speed direction marker
     configureMarkers();
@@ -116,7 +116,7 @@ void PathTracker::computeGeometry()
 bool PathTracker::checkPathTimeout()
 {
     bool ret = false;
-    if ( navigate_server_ptr->isActive() && !trajReceived || ros::Time::now() - last_trj_stamp > ros::Duration(2))
+    if ( !navigate_server_ptr->isActive() || !trajReceived || ros::Time::now() - last_trj_stamp > ros::Duration(2))
     {
         ROS_INFO("PATH TIMEOUT");
         publishZeroVel();
@@ -143,6 +143,7 @@ void PathTracker::navigate()
     }
     if (!checkPathTimeout() && (navigate_server_ptr->isActive() || !aproximated))
     {
+        ROS_INFO("Inside");
         computeGeometry();
 
         if (dist2GlobalGoal < 1)
@@ -611,7 +612,7 @@ void PathTracker::localPathCb(const trajectory_msgs::MultiDOFJointTrajectoryCons
     {
         nextPoint = msg->points[msg->points.size() > 1 ? 1 : 0];
         trajReceived = true;
-        last_trj_stamp = msg->header.stamp;
+        last_trj_stamp = ros::Time::now();
         margin->setMode(0);
     }
 }
