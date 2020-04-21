@@ -13,7 +13,7 @@ find_package(catkin REQUIRED COMPONENTS
   theta_star_2d
 )
 generate_dynamic_reconfigure_options(
-  cfg/nav.cfg
+  cfg/ArcoPathTracker.cfg
   cfg/SimplePathTracker.cfg
 )
 catkin_package(
@@ -29,31 +29,32 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
-add_executable(simple_path_tracker_node src/simple_path_tracker_node.cpp src/simple_path_tracker/UpoNavigationSimplePathTracker.cpp)
+#Standard path tracker node used currently in the NIx project. This one is based in the node used in arco project.
+add_executable(simple_path_tracker_node src/simple_path_tracker_node.cpp 
+                                        src/simple_path_tracker/UpoNavigationSimplePathTracker.cpp)
+
 target_link_libraries(simple_path_tracker_node ${catkin_LIBRARIES})
-add_dependencies(simple_path_tracker_node ${PROJECT_NAME}_gencfg  ${catkin_EXPORTED_TARGETS}  ${${PROJECT_NAME}_EXPORTED_TARGETS})
+add_dependencies(simple_path_tracker_node ${PROJECT_NAME}_gencfg  
+                                          ${catkin_EXPORTED_TARGETS}  
+                                          ${${PROJECT_NAME}_EXPORTED_TARGETS})
 
-#add_executable(test_node src/test.cpp)
-#target_link_libraries(test_node ${catkin_LIBRARIES}  )
-#add_dependencies(test_node ${catkin_EXPORTED_TARGETS}  ${${PROJECT_NAME}_EXPORTED_TARGETS})
+# Alternative Path tracker node used in the arco project based in the social force model
 
-#add_executable(upo_path_tracker src/navigation.cpp)
-#target_link_libraries(upo_path_tracker ${catkin_LIBRARIES} navigator)
+add_executable(sfm_path_tracker src/sfm_path_tracker.cpp 
+                                src/sfm_path_tracker/SFMController.cpp 
+                                src/arco_path_tracker/SecurityMargin.cpp)
 
-#add_executable(upo_path_tracker_2 src/navigation_2.cpp)
-#target_link_libraries(upo_path_tracker_2 ${catkin_LIBRARIES} navigator)
+target_link_libraries(sfm_path_tracker ${catkin_LIBRARIES})
+add_dependencies(sfm_path_tracker ${PROJECT_NAME}_gencfg 
+                                  ${catkin_EXPORTED_TARGETS}  
+                                  ${${PROJECT_NAME}_EXPORTED_TARGETS})
 
-#add_executable(nav_node src/nav_node.cpp)
-#add_library(security_margin src/securityMargin.cpp)
-#add_library(displacement src/displacement.cpp )
-#add_dependencies(displacement ${catkin_EXPORTED_TARGETS} ${${PROJECT_NAME}_EXPORTED_TARGETS})
-#target_link_libraries(nav_node ${catkin_LIBRARIES} displacement security_margin )
-#add_dependencies(nav_node ${PROJECT_NAME}_gencfg  ${catkin_EXPORTED_TARGETS}  ${${PROJECT_NAME}_EXPORTED_TARGETS})
-#
-#add_executable(sfm_nav_node src/nav_node_sfm.cpp src/securityMargin.cpp src/sfmcontroller.cpp)
-#target_link_libraries(sfm_nav_node ${catkin_LIBRARIES})
-#add_dependencies(sfm_nav_node ${PROJECT_NAME}_gencfg ${catkin_EXPORTED_TARGETS}  ${${PROJECT_NAME}_EXPORTED_TARGETS})
+# Path tracker node used in the arco project
+add_executable(arco_path_tracker_node src/arco_path_tracker_node.cpp
+                                      src/arco_path_tracker/ArcoPathTracker.cpp 
+                                      src/arco_path_tracker/SecurityMargin.cpp)
 
-#add_library(security_margin src/securityMargin.cpp)
-#add_library(PathTracker src/PathTracker.cpp )
-
+target_link_libraries(arco_path_tracker_node ${catkin_LIBRARIES})
+add_dependencies(arco_path_tracker_node ${PROJECT_NAME}_gencfg  
+                                   ${catkin_EXPORTED_TARGETS}  
+                                   ${${PROJECT_NAME}_EXPORTED_TARGETS})
