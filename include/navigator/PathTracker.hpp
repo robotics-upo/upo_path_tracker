@@ -22,7 +22,7 @@
 #include <actionlib/server/simple_action_server.h>
 
 #include <dynamic_reconfigure/server.h>
-#include <arco_path_tracker/PathTrackerConfig.h>
+#include <upo_path_tracker/PathTrackerConfig.h>
 #include <upo_actions/ExecuteMissionActionFeedback.h>
 
 #define RAMP_START 3
@@ -41,7 +41,7 @@ public:
 private:
     
     void moveForward();
-    void dynReconfCb(arco_path_tracker::PathTrackerConfig &config, uint32_t level);
+    void dynReconfCb(upo_path_tracker::PathTrackerConfig &config, uint32_t level);
     void computeGeometry();
     bool checkPathTimeout();
     void publishMarkers();
@@ -163,8 +163,8 @@ private:
     double angle1, angle2, angle3;
     std::string ns_ugv;
     //Dyn reconfg
-    std::unique_ptr<dynamic_reconfigure::Server<arco_path_tracker::PathTrackerConfig>> server;
-    std::unique_ptr<dynamic_reconfigure::Server<arco_path_tracker::PathTrackerConfig>::CallbackType> f;
+    std::unique_ptr<dynamic_reconfigure::Server<upo_path_tracker::PathTrackerConfig>> server;
+    std::unique_ptr<dynamic_reconfigure::Server<upo_path_tracker::PathTrackerConfig>::CallbackType> f;
 
     bool rampMode;
     ros::ServiceClient costmap_clean_srv;

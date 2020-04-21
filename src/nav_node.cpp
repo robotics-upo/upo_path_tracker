@@ -3,7 +3,7 @@
 #include <math.h>
 #include <navigator/displacement.hpp>
 #include <navigator/securityMargin.hpp>
-void callback(arco_path_tracker::navConfig &config, uint32_t level);
+void callback(upo_path_tracker::navConfig &config, uint32_t level);
 
 tf2_ros::Buffer tfBuffer;
 
@@ -21,8 +21,8 @@ int main(int argc, char **argv)
     ros::Rate loop_rate(20);
 
     //Dynamic reconfigure
-    dynamic_reconfigure::Server<arco_path_tracker::navConfig> server;
-    dynamic_reconfigure::Server<arco_path_tracker::navConfig>::CallbackType f;
+    dynamic_reconfigure::Server<upo_path_tracker::navConfig> server;
+    dynamic_reconfigure::Server<upo_path_tracker::navConfig>::CallbackType f;
 
     f = boost::bind(&Navigators::Displacement::dynReconfCb, &despl, _1, _2);
     server.setCallback(f);

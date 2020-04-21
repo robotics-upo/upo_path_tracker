@@ -1,6 +1,6 @@
 <launch>
-    <node pkg="arco_path_tracker" type="nav_node_2" name="nav_node_2" output="screen">
-        <rosparam command="load" file="$(find arco_path_tracker)/cfg/navigation2.yaml"/>
+    <node pkg="upo_path_tracker" type="nav_node_2" name="nav_node_2" output="screen">
+        <rosparam command="load" file="$(find upo_path_tracker)/cfg/navigation2.yaml"/>
         <remap from="/cmd_vel" to="/siar/nav_vel"/>
     </node>
 

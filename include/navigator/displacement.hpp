@@ -32,7 +32,7 @@
 #include <actionlib/server/simple_action_server.h>
 
 #include <dynamic_reconfigure/server.h>
-#include <arco_path_tracker/navConfig.h>
+#include <upo_path_tracker/navConfig.h>
 
 using namespace std;
 
@@ -61,7 +61,7 @@ public:
   **/
   void navigate();
 
-  void dynReconfCb(arco_path_tracker::navConfig &config, uint32_t level);
+  void dynReconfCb(upo_path_tracker::navConfig &config, uint32_t level);
   /**
    * Callbacks to get the needed info 
   **/

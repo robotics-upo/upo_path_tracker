@@ -5,10 +5,10 @@
 #include <navigator/securityMargin.hpp>
 
 #include <dynamic_reconfigure/server.h>
-#include <arco_path_tracker/navConfig.h>
+#include <upo_path_tracker/navConfig.h>
 
 
-void callback(arco_path_tracker::navConfig &config, uint32_t level);
+void callback(upo_path_tracker::navConfig &config, uint32_t level);
 
 tf2_ros::Buffer tfBuffer;
 
@@ -39,8 +39,8 @@ int main(int argc, char **argv)
     ros::Rate loop_rate(40);
 
     //Dynamic reconfigure
-    dynamic_reconfigure::Server<arco_path_tracker::navConfig> server;
-    dynamic_reconfigure::Server<arco_path_tracker::navConfig>::CallbackType f;
+    dynamic_reconfigure::Server<upo_path_tracker::navConfig> server;
+    dynamic_reconfigure::Server<upo_path_tracker::navConfig>::CallbackType f;
 
     f = boost::bind(&callback, _1, _2);
     server.setCallback(f);
@@ -56,6 +56,6 @@ int main(int argc, char **argv)
 
     return 0;
 }
-void callback(arco_path_tracker::navConfig &config, uint32_t level)
+void callback(upo_path_tracker::navConfig &config, uint32_t level)
 {
 }

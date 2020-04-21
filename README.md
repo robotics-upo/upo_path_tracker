@@ -16,7 +16,7 @@ sudo apt-get install ros-kinetic-desktop-full
 Once ROS is installed, inside your catkin workspace, src folder:
 
 ```
-git clone https://github.com/robotics-upo/arco_path_tracker.git
+git clone https://github.com/robotics-upo/upo_path_tracker.git
 ```
 
 Return to the catkin workspace base path and do

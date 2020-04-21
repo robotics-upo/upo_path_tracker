@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(arco_path_tracker)
+project(upo_path_tracker)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -43,11 +43,11 @@ include_directories(
 #target_link_libraries(test_node ${catkin_LIBRARIES}  )
 #add_dependencies(test_node ${catkin_EXPORTED_TARGETS}  ${${PROJECT_NAME}_EXPORTED_TARGETS})
 
-#add_executable(arco_path_tracker src/navigation.cpp)
-#target_link_libraries(arco_path_tracker ${catkin_LIBRARIES} navigator)
+#add_executable(upo_path_tracker src/navigation.cpp)
+#target_link_libraries(upo_path_tracker ${catkin_LIBRARIES} navigator)
 
-#add_executable(arco_path_tracker_2 src/navigation_2.cpp)
-#target_link_libraries(arco_path_tracker_2 ${catkin_LIBRARIES} navigator)
+#add_executable(upo_path_tracker_2 src/navigation_2.cpp)
+#target_link_libraries(upo_path_tracker_2 ${catkin_LIBRARIES} navigator)
 
 #add_executable(nav_node src/nav_node.cpp)
 #add_library(security_margin src/securityMargin.cpp)

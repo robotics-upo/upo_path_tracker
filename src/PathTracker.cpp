@@ -1,6 +1,6 @@
 #include <navigator/PathTracker.hpp>
 
-void PathTracker::dynReconfCb(arco_path_tracker::PathTrackerConfig &config, uint32_t level)
+void PathTracker::dynReconfCb(upo_path_tracker::PathTrackerConfig &config, uint32_t level)
 {
     this->angle1 = config.angle1;
     this->angle2 = config.angle2;
@@ -25,8 +25,8 @@ PathTracker::PathTracker()
     tfBuffer.reset(new tf2_ros::Buffer);
     tf2_list.reset(new tf2_ros::TransformListener(*tfBuffer));
 
-    server.reset(new dynamic_reconfigure::Server<arco_path_tracker::PathTrackerConfig>);
-    f.reset(new dynamic_reconfigure::Server<arco_path_tracker::PathTrackerConfig>::CallbackType);
+    server.reset(new dynamic_reconfigure::Server<upo_path_tracker::PathTrackerConfig>);
+    f.reset(new dynamic_reconfigure::Server<upo_path_tracker::PathTrackerConfig>::CallbackType);
 
     *f = boost::bind(&PathTracker::dynReconfCb, this, _1, _2);
     server->setCallback(*f);

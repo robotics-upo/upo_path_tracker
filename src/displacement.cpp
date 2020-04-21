@@ -20,7 +20,7 @@ bool Displacement::activateBackwardSrv(std_srvs::TriggerRequest &req, std_srvs::
 
     return true;
 }
-void Displacement::dynReconfCb(arco_path_tracker::navConfig &config, uint32_t level)
+void Displacement::dynReconfCb(upo_path_tracker::navConfig &config, uint32_t level)
 {
     this->holonomic = config.holonomic;
     this->do_navigate = config.do_navigate;
