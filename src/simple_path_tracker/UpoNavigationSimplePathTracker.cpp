@@ -1,4 +1,4 @@
-#include <navigator/PathTracker.hpp>
+#include <simple_path_tracker/PathTracker.hpp>
 
 void PathTracker::dynReconfCb(upo_path_tracker::PathTrackerConfig &config, uint32_t level)
 {
