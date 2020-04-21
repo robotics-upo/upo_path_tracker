@@ -4,11 +4,10 @@
 
 int main(int argc, char **argv)
 {
-    ros::init(argc, argv, "nav_node_2");
+    ros::init(argc, argv, "simple_path_tracker");
 
 
-    PathTracker tracker;
-    //Displacement class subscribers
+    Upo::Navigation::SimplePathTracker tracker;
 
     ros::Rate loop_rate(10);
     while (ros::ok())

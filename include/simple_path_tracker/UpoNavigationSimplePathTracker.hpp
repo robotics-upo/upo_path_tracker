@@ -1,6 +1,6 @@
 
-#ifndef UPO_NAVIGATION_SIMPLE_PATH_TRACKER_H_
-#define UPO_NAVIGATION_SIMPLE_PATH_TRACKER_H_
+#ifndef SIMPLE_PATH_TRACKER_H_
+#define SIMPLE_PATH_TRACKER_H_
 
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/PoseStamped.h>
@@ -12,18 +12,20 @@
 
 #include <trajectory_msgs/MultiDOFJointTrajectory.h>
 #include <trajectory_msgs/MultiDOFJointTrajectoryPoint.h>
+#include <visualization_msgs/Marker.h>
 
 #include <theta_star_2d/checkObstacles.h>
-#include <navigator/securityMargin.hpp>
 
 #include <upo_actions/NavigateAction.h>
 #include <upo_actions/RotationInPlaceAction.h>
+#include <std_srvs/Trigger.h>
+#include <tf/transform_datatypes.h>
 
 #include <actionlib/server/simple_action_server.h>
 
 #include <dynamic_reconfigure/server.h>
 #include <upo_actions/ExecuteMissionActionFeedback.h>
-#include <upo_path_tracker/PathTrackerConfig.h>
+#include <upo_path_tracker/SimplePathTrackerConfig.h>
 
 namespace Upo
 {
@@ -41,7 +43,7 @@ public:
 
 private:
   void moveForward();
-  void dynReconfCb(upo_path_tracker::PathTrackerConfig &config, uint32_t level);
+  void dynReconfCb(upo_path_tracker::SimplePathTrackerConfig &config, uint32_t level);
   void computeGeometry();
   bool checkPathTimeout();
   void publishMarkers();
@@ -147,7 +149,6 @@ private:
   // Markers for RViz
   std::vector<visualization_msgs::Marker> markers;
   // Security margin pointer
-  std::unique_ptr<SecurityMargin> margin;
 
   // Action lib server poitners
   std::unique_ptr<NavigateServer> navigate_server_ptr;
@@ -165,15 +166,15 @@ private:
   double angle1, angle2, angle3;
   std::string ns_ugv;
   // Dyn reconfg
-  std::unique_ptr<dynamic_reconfigure::Server<upo_path_tracker::PathTrackerConfig>> server;
-  std::unique_ptr<dynamic_reconfigure::Server<upo_path_tracker::PathTrackerConfig>::CallbackType> f;
+  std::unique_ptr<dynamic_reconfigure::Server<upo_path_tracker::SimplePathTrackerConfig>> server;
+  std::unique_ptr<dynamic_reconfigure::Server<upo_path_tracker::SimplePathTrackerConfig>::CallbackType> f;
 
   bool rampMode;
   ros::ServiceClient costmap_clean_srv;
   int rot_thresh;
   double dist_aprox1;
 };
-};  // namespace Navigation
-};  // namespace Upo
+}  // namespace Navigation
+}  // namespace Upo
 
 #endif /* UPO_NAVIGATION_SIMPLE_PATH_TRACKER_H_ */
