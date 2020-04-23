@@ -671,49 +671,7 @@ void SimplePathTracker::rotPreemptCb()
 }
 // Aux Functions
 
-geometry_msgs::PoseStamped SimplePathTracker::transformPose(trajectory_msgs::MultiDOFJointTrajectoryPoint point,
-                                                            std::string from, std::string to)
-{
-  geometry_msgs::PoseStamped pose;
-  pose.header.frame_id = from;
-  pose.header.seq = rand();
-  pose.header.stamp = ros::Time::now();
 
-  pose.pose.orientation = point.transforms[0].rotation;
-
-  pose.pose.position.x = point.transforms[0].translation.x;
-  pose.pose.position.y = point.transforms[0].translation.y;
-  pose.pose.position.z = point.transforms[0].translation.z;
-  return transformPose(pose, from, to);
-}
-geometry_msgs::PoseStamped SimplePathTracker::transformPose(geometry_msgs::PoseStamped originalPose, std::string from,
-                                                            std::string to)
-{
-  geometry_msgs::TransformStamped transformStamped;
-  geometry_msgs::PoseStamped nextPoseStamped;
-
-  try
-  {
-    transformStamped = tfBuffer->lookupTransform(to, from, ros::Time(0));
-  }
-  catch (tf2::TransformException &ex)
-  {
-    ROS_WARN("No transform %s", ex.what());
-  }
-
-  tf2::doTransform(originalPose, nextPoseStamped, transformStamped);
-
-  return nextPoseStamped;
-}
-float SimplePathTracker::getYawFromQuat(geometry_msgs::Quaternion quat)
-{
-  double r, p, y;
-  tf::Quaternion q(quat.x, quat.y, quat.z, quat.w);
-  tf::Matrix3x3 M(q);
-  M.getRPY(r, p, y);
-
-  return y / M_PI * 180;
-}
 
 }  // namespace Navigation
 }  // namespace Upo
