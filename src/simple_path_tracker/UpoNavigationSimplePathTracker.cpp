@@ -1,677 +1,597 @@
 #include <simple_path_tracker/UpoNavigationSimplePathTracker.hpp>
 
+using namespace Upo::Utils::Geometry;
+using namespace Upo::Utils::Transforms;
 using namespace Upo::Navigation;
-using namespace std;
 
-namespace Upo
-{
-namespace Navigation
-{
-void SimplePathTracker::dynReconfCb(upo_path_tracker::SimplePathTrackerConfig &config, uint32_t level)
-{
-  this->angle1 = config.angle1;
-  this->angle2 = config.angle2;
-  this->angle3 = config.angle3;
+namespace Upo{
+    namespace Navigation{
 
-  this->holon = config.holonomic;
-  this->doNavigate = config.do_navigate;
-  this->angMaxSpeed = config.angular_max_speed;
-  this->linMaxSpeed = config.linear_max_speed;
-  this->distMargin = config.dist_margin;
-  this->a = config.a;
-  this->b = config.b;
-  this->bBack = config.b_back;
-  this->linMaxSpeedBack = config.linear_max_speed_back;
-}
-SimplePathTracker::SimplePathTracker()
-{
-  // Pointer to the security margin object createdÃ§
-  nh.reset(new ros::NodeHandle("~"));
-  tfBuffer.reset(new tf2_ros::Buffer);
-  tf2_list.reset(new tf2_ros::TransformListener(*tfBuffer));
+        SimplePathTracker::SimplePathTracker(){
 
-  server.reset(new dynamic_reconfigure::Server<upo_path_tracker::SimplePathTrackerConfig>);
-  f.reset(new dynamic_reconfigure::Server<upo_path_tracker::SimplePathTrackerConfig>::CallbackType);
+            tf2_list_.reset(new tf2_ros::TransformListener(tf_buffer_));
 
-  *f = boost::bind(&SimplePathTracker::dynReconfCb, this, _1, _2);
-  server->setCallback(*f);
-  costmap_clean_srv = nh->serviceClient<std_srvs::Trigger>("/custom_costmap_node/reset_costmap");
+            server_.reset(new dynamic_reconfigure::Server<upo_path_tracker::SimplePathTrackerConfig>);
+            f_.reset(new dynamic_reconfigure::Server<upo_path_tracker::SimplePathTrackerConfig>::CallbackType);
+            *f_ = boost::bind(&SimplePathTracker::dynamicReconfigureCallback, this, _1, _2);
+            server_->setCallback(*f_);
 
-  nh->param("debug", debug, (bool)true);
-  nh->param("do_navigate", doNavigate, (bool)true);
-  nh->param("holonomic", holon, (bool)true);
-  nh->param("angular_max_speed", angMaxSpeed, (double)0.4);
-  nh->param("linear_max_speed", linMaxSpeed, (double)0.2);
-  nh->param("ramp_speed", ramp_speed, (double)0.1);
-  nh->param("linear_max_speed_back", linMaxSpeedBack, (double)0.2);
-  nh->param("angle_margin", angleMargin, (double)10);
-  nh->param("dist_margin", distMargin, (double)0.35);
-  nh->param("a", a, (double)0.5);
-  nh->param("b", b, (double)0.5);
-  nh->param("b_back", bBack, (double)0.5);
-  nh->param("start_orientate_dist", orientDist, (double)0.5);
-  nh->param("robot_base_frame", robot_frame, (string) "base_link");
-  nh->param("world_frame", world_frame, (string) "map");
+            nh_.param("debug", debug_, true);
+            nh_.param("holonomic", holonomic_, true);
 
-  nh->param("angle1", angle1, (double)20);
-  nh->param("angle2", angle2, (double)65);
-  nh->param("angle3", angle3, (double)15);
-  nh->param("/ns_ugv", ns_ugv, (std::string) "");
-  nh->param("rot_thresh", rot_thresh, (int)350);
-  nh->param("dist_aprox1", dist_aprox1, (double)0.05);
+            nh_.param("angular_max_speed", ang_max_speed_, 0.4);
+            nh_.param("linear_max_speed", lin_max_speed_, 0.2);
+            nh_.param("linear_max_speed_back", lin_max_speed_back_, 0.2);
+            nh_.param("angle_margin", angle_margin_, 10.0);
+            nh_.param("dist_margin", dist_margin_, 0.35);
+            nh_.param("a", a_, 0.5);
+            nh_.param("b", b_, 0.5);
+            nh_.param("b_back", b_back_, 0.5);
+            nh_.param("start_orientate_dist", orientdist_, 0.5);
+            nh_.param("angle1", angle1_, 20.0);
+            nh_.param("angle2", angle2_, 65.0);
+            nh_.param("angle3", angle3_, 15.0);
+            nh_.param("dist_aprox1_", dist_aprox1_, 0.05);
 
-  // Publishers, only twist and markers
-  twistPub = nh->advertise<geometry_msgs::Twist>("/cmd_vel", 1);
-  markersPub = nh->advertise<visualization_msgs::Marker>("speedMarker", 2);
+            nh_.param("rot_thresh", rot_thresh_, 350);
 
-  localPathSub = nh->subscribe<trajectory_msgs::MultiDOFJointTrajectory>("/local_planner_node/local_path", 2,
-                                                                         &SimplePathTracker::localPathCb, this);
-  missionFbSub = nh->subscribe<upo_actions::ExecuteMissionActionFeedback>("/Execute_Mission/feedback", 1,
-                                                                          &SimplePathTracker::missionFbCb, this);
-  // Navigate action server configuration
-  std::string server_name = "/" + ns_ugv + "/Navigation";
-  navigate_server_ptr.reset(new NavigateServer(*nh, server_name.c_str(), false));
-  navigate_server_ptr->registerGoalCallback(boost::bind(&SimplePathTracker::navGoalCb, this));
-  navigate_server_ptr->registerPreemptCallback(boost::bind(&SimplePathTracker::navPreemptCb, this));
-  navigate_server_ptr->start();
+            nh_.param("robot_base_frame", robot_base_frame_id_, (std::string) "base_link");
+            nh_.param("world_frame_id_", world_frame_id_, (std::string) "map");
+            nh_.param("odom_frame", odom_frame_id_, (std::string) "odom");
 
-  // Rotation action server configuration
-  rot_server_ptr.reset(new RotationInPlaceServer(*nh, "/Recovery_Rotation", false));
-  rot_server_ptr->registerGoalCallback(boost::bind(&SimplePathTracker::rotGoalCb, this));
-  rot_server_ptr->registerPreemptCallback(boost::bind(&SimplePathTracker::rotPreemptCb, this));
-  rot_server_ptr->start();
 
-  // Service to check if it's possible a rotation in place consulting the costmap
-  check_rot_srv = nh->serviceClient<theta_star_2d::checkObstacles>("/custom_costmap_node/check_env");
-  ROS_INFO("CONFIGURED");
-  backwards = false;
-  recoveryRotation = false;
-  aproximated = false;
-  phase2 = true;
-  phase1 = true;
-  // Flags for internal states
-  trajReceived = false;
-  rampMode = false;
-  last_trj_stamp = ros::Time(1, 1);
-  Vx = Vy = Wz = 0;
-  // Configure speed direction marker
-  configureMarkers();
-}
-void SimplePathTracker::missionFbCb(const upo_actions::ExecuteMissionActionFeedbackConstPtr &fb)
-{
-  /*if (fb->feedback.waypoint_type.data == RAMP_END)
-  {
-    ROS_WARN("START RAMP");
-    rampMode = true;
-  }
-  else if (rampMode)
-  {
-    ROS_WARN("FINISH RAMP");
-    rampMode = false;
-  }*/
-}
-void SimplePathTracker::computeGeometry()
-{
-  nextPoseBlFrame = transformPose(nextPoint, world_frame, robot_frame);
-  globalGoalBlFrame = transformPose(globalGoal, world_frame, robot_frame);
-  angle2GlobalGoal = getYawFromQuat(globalGoal.pose.orientation);
-  dist2GlobalGoal = euclideanDistance(globalGoalBlFrame);
-  angle2NextPoint = atan2(nextPoseBlFrame.pose.position.y, nextPoseBlFrame.pose.position.x);
-  dist2NextPoint = euclideanDistance(nextPoseBlFrame);
-}
-bool SimplePathTracker::checkPathTimeout()
-{
-  bool ret = false;
-  if (!navigate_server_ptr->isActive() || !trajReceived || ros::Time::now() - last_trj_stamp > ros::Duration(2))
-  {
-    ROS_INFO("PATH TIMEOUT");
-    publishZeroVel();
-    ret = true;
-  }
-  return ret;
-}  // namespace Navigators
-void SimplePathTracker::navigate()
-{
-  if (rot_server_ptr->isNewGoalAvailable())
-  {
-    rot_inplace = rot_server_ptr->acceptNewGoal();
-  }
+            costmap_clean_srv = nh_.serviceClient<std_srvs::Trigger>("/custom_costmap_node/reset_costmap");
 
-  if (navigate_server_ptr->isNewGoalAvailable())
-  {
-    ROS_INFO("Accepting new goal ");
-    navigate_goal = navigate_server_ptr->acceptNewGoal();
-    globalGoal.pose = navigate_goal->global_goal;
-    cout << "globalGoal: " << globalGoal.pose.position.x << " " << globalGoal.pose.position.y << " "
-         << globalGoal.pose.orientation.z << " " << globalGoal.pose.orientation.w << endl;
+            // Publishers, only twist and markers_
+            twist_pub_ = pnh_.advertise<geometry_msgs::Twist>("/cmd_vel", 1);
+            markers_pub_ = pnh_.advertise<visualization_msgs::Marker>("speed_markers", 2);
 
-    time_count = ros::Time::now();
-    setGoalReachedFlag(0);
-  }
-  if (!checkPathTimeout() && (navigate_server_ptr->isActive() || !aproximated))
-  {
-    ROS_INFO("Inside");
-    computeGeometry();
+            local_path_sub_ = nh_.subscribe<trajectory_msgs::MultiDOFJointTrajectory>("/local_planner_node/local_path", 2,
+                                                                                   &SimplePathTracker::localPathCallback, this);
+            mission_fb_sub_ = nh_.subscribe<upo_actions::ExecuteMissionActionFeedback>("/Execute_Mission/feedback", 1,
+                                                                                    &SimplePathTracker::missionFbCallback, this);
+            // Navigate action server configuration
+            navigate_server_.reset(new NavigateServer(pnh_, "/SimplePathTrackerActionServer", false));
+            navigate_server_->start();
 
-    /*if (dist2GlobalGoal < 1)
-    {
-      margin->setMode(1);
-    }*/
-    if (!rampMode)
-    {
-      moveNonHolon();
-    }
-    else
-    {
-      moveForward();
-    }
+            // Rotation action server configuration
+            rot_server_.reset(new RotationInPlaceServer(pnh_, "/Recovery_Rotation", false));
+            rot_server_->start();
 
-    publishCmdVel();
-  }
-}
-void SimplePathTracker::moveForward()
-{
-  Vx = ramp_speed;
-  Wz = 0;
-  if (dist2GlobalGoal < 0.2)
-  {
-    aproximated = true;
-    setGoalReachedFlag(1);
-  }
-  else
-  {
-    publishCmdVel();
-  }
-}
-void SimplePathTracker::publishCmdVel()
-{
-  if (1)  // margin->canIMove())
-  {
-    if (navigationPaused)
-    {
-      navigationPaused = false;
-    }
-    fillFeedback(Vx, Vy, Wz, false);
+            // Service to check if it's possible a rotation in place consulting the costmap
+            check_rot_srv_ = nh_.serviceClient<theta_star_2d::checkObstacles>("/custom_costmap_node/check_env");
 
-    vel.angular.z = Wz;
-    vel.linear.x = Vx;
-    vel.linear.y = Vy;
-
-    twistPub.publish(vel);
-    publishMarkers();
-  }
-  else if (!navigationPaused)
-  {
-    fillFeedback(0, 0, 0, true, "Security stop");
-    publishZeroVel();
-    navigationPaused = true;
-  }
-}
-// TODO Implement
-bool SimplePathTracker::validateRotInPlace(int thresh)
-{
-  bool ret = false;
-
-  theta_star_2d::checkObstacles trg;
-
-  trg.request.thresh.data = thresh;
-
-  check_rot_srv.call(trg);
-  ROS_INFO("Validate rotation requested: %s", trg.response.message.c_str());
-  if (trg.response.success)
-    return true;
-
-  return ret;
-}
-void SimplePathTracker::moveNonHolon()
-{
-  if (angle2NextPoint < 0)
-  {
-    angleBack = angle2NextPoint + M_PI;
-  }
-  else
-  {
-    angleBack = angle2NextPoint - M_PI;
-  }
-  if (dist2GlobalGoal > distMargin && phase1)
-  {
-    ROS_INFO_THROTTLE(0.5, "DIST: %.2f", dist2GlobalGoal);
-    ROS_INFO_THROTTLE(0.5, "Angle Back: %.2f", angleBack);
-    ROS_INFO_THROTTLE(0.5, "Backwards: %d", backwards);
-    ROS_INFO_THROTTLE(0.5, "angle to next point: %.2f", angle2NextPoint);
-    if (fabs(angle2NextPoint) > d2rad(angle1))  // Rot in place
-    {
-      if (!backwards && (fabs(angle2NextPoint) < d2rad(angle2) || validateRotInPlace()))
-      {
-        ROS_INFO("\t 1");
-        rotationInPlace(angle2NextPoint, 0, true);
-        Vx = 0;
-      }
-      else if (!backwards)
-      {
-        ROS_INFO("Enabling backwards");
-        backwards = true;
-        time_count = ros::Time::now();
-      }
-      else if (ros::Time::now() - time_count > ros::Duration(100) && validateRotInPlace())  // Reset backwards
-      {
-        ROS_INFO("\t 2");
-        backwards = false;
-      }
-      else if (fabs(angleBack) > fabs(d2rad(angle3)))  // Too much angular distance, do only rotation in place
-      {
-        ROS_INFO("\t 3");
-        rotationInPlace(angleBack, 0, true);
-        Vx = 0;
-      }
-      else
-      {
-        ROS_INFO("\t 4");
-        Vx = -getVel(linMaxSpeedBack, bBack, dist2GlobalGoal);
-        rotationInPlace(angleBack, 0, false);
-      }
-    }
-    else
-    {
-      // ROS_INFO("\t 5");
-      Vx = getVel(linMaxSpeed, b, dist2GlobalGoal);
-      Vy = 0;
-      rotationInPlace(angle2NextPoint, 0, false);
-    }
-  }
-  else if (!aproximated)
-  {
-    if (phase1)
-    {
-      phase1 = false;
-      std_srvs::Trigger trg;
-      costmap_clean_srv.call(trg);
-    }
-    // setGoalReachedFlag(1);
-    if (phase2)  //&& !rotationInPlace(angle2GlobalGoal, 5))
-    {
-      Wz = 0;
-      ROS_INFO("Fase 1");
-
-      if (globalGoalBlFrame.pose.position.x > 0 && globalGoalBlFrame.pose.position.x < dist_aprox1)
-      {
-        Vx = 0.01;
-      }
-      else if (globalGoalBlFrame.pose.position.x < 0 && globalGoalBlFrame.pose.position.x > -dist_aprox1)
-      {
-        Vx = -0.01;
-      }
-      else
-      {
-        ROS_INFO("OUT FASE 1");
-        phase2 = false;
-        Vx = 0;
-      }
-      // Vx = getVel(globalGoalBlFrame.pose.position.x < 0 ? -linMaxSpeed : linMaxSpeed, b, dist2GlobalGoal);
-    }
-    else
-    {
-      ROS_INFO("2 FASE");
-
-      static geometry_msgs::PoseStamped robotPose;
-      static tf2::Quaternion robotQ;
-      static tf2::Matrix3x3 m;
-      static double robotYaw, rpitch, rroll;
-
-      robotPose.header.frame_id = robot_frame;
-      robotPose.header.stamp = ros::Time(0);
-      robotPose.pose.orientation.w = 1;
-      robotPose.pose.orientation.z = 0;
-      robotPose = transformPose(robotPose, robot_frame, world_frame);
-
-      robotQ.setW(robotPose.pose.orientation.w);
-      robotQ.setZ(robotPose.pose.orientation.z);
-      robotQ.normalize();
-
-      m.setRotation(robotQ);
-      m.getEulerYPR(robotYaw, rpitch, rroll);
-
-      ROS_INFO("angle of GlobalGoal: %.2f, robotYaw: %.2f", angle2GlobalGoal, rad2d(robotYaw));
-      static bool aprox_rot;
-      static double rotval;
-      if (angle2GlobalGoal * rad2d(robotYaw) < 0)
-      {
-        if (angle2GlobalGoal < 0)
+            last_trj_stamp_ = ros::Time(1, 1);
+            // Configure speed direction marker
+            configureMarkers();
+        }     
+        //TODO Clean this function
+        void SimplePathTracker::moveNonHolon()
         {
-          rotval = (180 + angle2GlobalGoal) + (180 - rad2d(robotYaw));
-        }
-        else
+            angle_back_ = angle_to_next_point_ < 0 ?  angle_to_next_point_ + M_PI: 
+                                                      angle_to_next_point_ - M_PI;
+
+          if (dist_to_global_goal_ > dist_margin_ && phase1_)
+          {
+
+            ROS_INFO_THROTTLE(0.5, "DIST: %.2f", dist_to_global_goal_);
+            ROS_INFO_THROTTLE(0.5, "Angle Back: %.2f", angle_back_);
+            ROS_INFO_THROTTLE(0.5, "Backwards: %d", backwards_);
+            ROS_INFO_THROTTLE(0.5, "angle to next point: %.2f", angle_to_next_point_);
+
+            if (fabs(angle_to_next_point_) > deg2Rad(angle1_))  // Rot in place
+            {
+              if (!backwards_ && (fabs(angle_to_next_point_) < deg2Rad(angle2_) || validateRotInPlace()))
+              {
+                ROS_INFO("\t 1");
+                rotationInPlace(angle_to_next_point_, 0, true);
+                vx_ = 0;
+              }
+              else if (!backwards_)
+              {
+                ROS_INFO("Enabling backwards");
+                backwards_ = true;
+                time_count_ = ros::Time::now();
+              }
+              else if (ros::Time::now() - time_count_ > ros::Duration(100) && validateRotInPlace())  // Reset backwards
+              {
+                ROS_INFO("\t 2");
+                backwards_ = false;
+              }
+              else if (fabs(angle_back_) > fabs(deg2Rad(angle3_)))  // Too much angular distance, do only rotation in place
+              {
+                ROS_INFO("\t 3");
+                rotationInPlace(angle_back_, 0, true);
+                vx_ = 0;
+              }
+              else
+              {
+                ROS_INFO("\t 4");
+                vx_ = -getVel(lin_max_speed_back_, b_back_, dist_to_global_goal_);
+                rotationInPlace(angle_back_, 0, false);
+              }
+            }
+            else
+            {
+              // ROS_INFO("\t 5");
+              vx_ = getVel(lin_max_speed_, b_, dist_to_global_goal_);
+              vy_ = 0;
+              rotationInPlace(angle_to_next_point_, 0, false);
+            }
+          }
+          else if (!aproximated_)
+          {
+            if (phase1_)
+            {
+              phase1_ = false;
+              std_srvs::Trigger trg;
+              costmap_clean_srv.call(trg);
+            }
+            if (phase2_)  
+            {
+              wz_ = 0;
+              ROS_INFO("Fase 1");
+
+              if (global_goal_robot_frame_.pose.position.x > 0 && global_goal_robot_frame_.pose.position.x < dist_aprox1_)
+              {
+                vx_ = 0.01;
+              }
+              else if (global_goal_robot_frame_.pose.position.x < 0 && global_goal_robot_frame_.pose.position.x > -dist_aprox1_)
+              {
+                vx_ = -0.01;
+              }
+              else
+              {
+                ROS_INFO("OUT FASE 1");
+                phase2_ = false;
+                vx_ = 0;
+              }
+              // Vx = getVel(global_goal_robot_frame_.pose.position.x < 0 ? -linMaxSpeed : linMaxSpeed, b, dist2GlobalGoal);
+            }
+            else
+            {
+              ROS_INFO("2 FASE");
+
+              static geometry_msgs::PoseStamped robotPose;
+              static tf2::Quaternion robotQ;
+              static tf2::Matrix3x3 m;
+              static double robotYaw, rpitch, rroll;
+
+              robotPose.header.frame_id = robot_base_frame_id_;
+              robotPose.header.stamp = ros::Time(0);
+              robotPose.pose.orientation.w = 1;
+              robotPose.pose.orientation.z = 0;
+              robotPose = transformPose(robotPose, robot_base_frame_id_, world_frame_id_, tf_buffer_);
+
+              robotQ.setW(robotPose.pose.orientation.w);
+              robotQ.setZ(robotPose.pose.orientation.z);
+              robotQ.normalize();
+
+              m.setRotation(robotQ);
+              m.getEulerYPR(robotYaw, rpitch, rroll);
+
+              ROS_INFO("angle of GlobalGoal: %.2f, robotYaw: %.2f", angle_to_global_goal_, rad2Deg(robotYaw));
+              static bool aprox_rot;
+              static double rotval;
+              if (angle_to_global_goal_ * rad2Deg(robotYaw) < 0)
+              {
+                if (angle_to_global_goal_ < 0)
+                {
+                  rotval = (180 + angle_to_global_goal_) + (180 - rad2Deg(robotYaw));
+                }
+                else
+                {
+                  rotval = -((180 - angle_to_global_goal_) + (180 + rad2Deg(robotYaw)));
+                }
+              }
+              else
+              {
+                rotval = angle_to_global_goal_ - rad2Deg(robotYaw);
+              }
+              if (fabs(rotval) > 180)
+              {
+                if (rotval < 0)
+                {
+                  rotval += 360;
+                }
+                else
+                {
+                  rotval -= 360;
+                }
+              }
+              ROS_INFO("Rotation value: %.2f", rotval);
+              if (validateRotInPlace(rot_thresh_))
+              {
+                aprox_rot = rotationInPlace(deg2Rad(rotval), 5, true);
+                if (!aprox_rot)
+                {
+                  aproximated_ = true;
+                  setGoalReachedFlag(1);
+                  ROS_INFO("Aproximated");
+                }
+              }
+              else
+              {
+                aproximated_ = true;
+                setGoalReachedFlag(1);
+                ROS_WARN("Arrived but not aproximated");
+              }
+            }
+          }
+        }  // namespace Navigators
+        void SimplePathTracker::moveHolon(double final_yaw)
         {
-          rotval = -((180 - angle2GlobalGoal) + (180 + rad2d(robotYaw)));
+          double v = getVel(lin_max_speed_, b_, dist_to_global_goal_);
+
+          vx_ = cos(angle_to_next_point_) * v;
+          vy_ = sin(angle_to_next_point_) * v;
+
+          wz_ = getVel(ang_max_speed_, 4 * a_, angle_to_next_point_);
+          if (fabs(angle_to_next_point_) > M_PI_2)
+          {
+            vx_ /= 1.5;
+            vy_ /= 1.5;
+          }
+          else if (fabs(angle_to_next_point_) > M_PI_4)
+          {
+            vx_ /= 1.2;
+            vy_ /= 1.2;
+          }
+
+          if (dist_to_global_goal_ < orientdist_)
+            setRobotOrientation(final_yaw, 0, 0, ang_max_speed_, 0);
         }
-      }
-      else
-      {
-        rotval = angle2GlobalGoal - rad2d(robotYaw);
-      }
-      if (fabs(rotval) > 180)
-      {
-        if (rotval < 0)
+        //TODO Clean this function
+        void SimplePathTracker::setRobotOrientation(float final_yaw, bool goal, bool pub, float speed, float angle_margin_)
         {
-          rotval += 360;
+          // We receive the quaternion q in the frame map. We have to know the orientation of the robot
+          // also in the map frame
+
+          geometry_msgs::PoseStamped robotPose;
+          robotPose.header.frame_id = robot_base_frame_id_;
+          robotPose.header.stamp = ros::Time(0);
+          robotPose.header.seq = rand();
+
+          robotPose.pose.position.x = 0;
+          robotPose.pose.position.y = 0;
+          robotPose.pose.position.z = 0;
+
+          robotPose.pose.orientation.w = 1;
+
+          robotPose = transformPose(robotPose, robot_base_frame_id_, world_frame_id_,tf_buffer_);
+          
+          float robotYaw = getYawFromQuat(robotPose.pose.orientation);
+
+          if (robotYaw < 0)
+            robotYaw += 360;
+          if (final_yaw < 0)
+            final_yaw += 360;
+
+          float yaw_diff = final_yaw - robotYaw;
+
+          if (fabs(yaw_diff) > 180)
+            yaw_diff -= 360 * yaw_diff / fabs(yaw_diff);
+
+          if (fabs(yaw_diff) > angle_margin_)
+          {
+            // This one works VERY WELL DONT TOUCH IT, antes era 2 en vez de 3
+            wz_ = 3 * (yaw_diff * (speed - 0.1) / (180 - angle_margin_) + speed - 180 / (180 - angle_margin_) * (speed - 0.1));
+          }
+          else if (goal)
+          {
+            setGoalReachedFlag(1);
+          }
+
+          if (pub)
+            publishCmdVel();
         }
-        else
+        //TODO clean
+        bool SimplePathTracker::rotationInPlace(geometry_msgs::Quaternion finalOrientation, double threshold_,
+                                                bool final = false)
         {
-          rotval -= 360;
+          static geometry_msgs::PoseStamped robotPose;
+          static tf2::Quaternion finalQ, robotQ;
+
+          robotPose.header.frame_id = robot_base_frame_id_;
+          robotPose.header.stamp = ros::Time(0);
+          robotPose.pose.orientation.w = 1;
+          robotPose = transformPose(robotPose, robot_base_frame_id_, world_frame_id_, tf_buffer_);
+
+          robotQ.setW(robotPose.pose.orientation.w);
+          robotQ.setZ(robotPose.pose.orientation.z);
+
+          finalQ.setW(finalOrientation.w);
+          finalQ.setZ(finalOrientation.z);
+
+          // This give us the angular difference to the final orientation
+          tf2Scalar shortest = tf2::angleShortestPath(robotQ, finalQ);
+          double sh = static_cast<double>(shortest);
+          std::cout << "Shortest: " << sh << std::endl;
+
+          return rotationInPlace(shortest, threshold_, final);
         }
-      }
-      ROS_INFO("Rotation value: %.2f", rotval);
-      if (validateRotInPlace(rot_thresh))
-      {
-        aprox_rot = rotationInPlace(d2rad(rotval), 5, true);
-        if (!aprox_rot)
+        //TODO clean
+        bool SimplePathTracker::rotationInPlace(tf2Scalar dYaw, double threshold_, bool final = false)
         {
-          aproximated = true;
-          setGoalReachedFlag(1);
-          ROS_INFO("Aproximated");
+          static tf2::Quaternion q_rot, q_f, robotQ;
+          static geometry_msgs::PoseStamped robotPose;
+          robotPose.header.frame_id = robot_base_frame_id_;
+          robotPose.header.stamp = ros::Time(0);
+          robotPose.pose.orientation.w = 1;
+          robotPose = transformPose(robotPose, robot_base_frame_id_, world_frame_id_, tf_buffer_);
+
+          robotQ.setW(robotPose.pose.orientation.w);
+          robotQ.setZ(robotPose.pose.orientation.z);
+
+          q_rot.setRPY(0, 0, dYaw);
+
+          q_f = robotQ * q_rot;
+          q_f.normalize();
+
+         
+          static double var;
+          var = static_cast<double>(dYaw);  // radians
+          // std::cout << "Rotation var: " << rad2Deg(var) << std::endl;
+          if (fabs(rad2Deg(var)) > threshold_)
+          {
+
+            if (rad2Deg(var) > 90)
+            {
+              var = M_PI_2;
+            }
+            else if (rad2Deg(var) < -90)
+            {
+              var = -M_PI_2;
+            }
+
+            wz_ = getVel(final ? ang_max_speed_ + 0.05 : ang_max_speed_, final ? a_ / 2 : a_, var);  // TODO poner el 0.2 como parametro
+
+            return true;
+          }
+          else
+          {
+            wz_ = 0;
+            return false;
+          }
         }
-      }
-      else
-      {
-        aproximated = true;
-        setGoalReachedFlag(1);
-        ROS_WARN("Arrived but not aproximated");
-      }
+        //TODO clean
+        
+        void SimplePathTracker::computeGeometry()
+        {
+          next_pose_robot_frame_ = transformPose(next_point_, world_frame_id_, robot_base_frame_id_, tf_buffer_);
+          global_goal_robot_frame_ = transformPose(global_goal_, world_frame_id_, robot_base_frame_id_, tf_buffer_);
+          angle_to_global_goal_ = getYawFromQuat(global_goal_.pose.orientation);
+          dist_to_global_goal_ = euclideanDistance(global_goal_robot_frame_);
+          angle_to_next_point_ = atan2(next_pose_robot_frame_.pose.position.y, next_pose_robot_frame_.pose.position.x);
+          dist_to_next_point_ = euclideanDistance(next_pose_robot_frame_);
+        }
+        //TODO clean
+        bool SimplePathTracker::checkPathTimeout()
+        {
+          bool ret = false;
+          if (!navigate_server_->isActive() || !traj_received_ || ros::Time::now() - last_trj_stamp_ > ros::Duration(2))
+          {
+            publishZeroSpeeds();
+            ret = true;
+          }
+
+          return ret;
+        }  // namespace Navigators
+        //TODO clean
+
+        void SimplePathTracker::navigate()
+        {
+          if (rot_server_->isNewGoalAvailable())
+          {
+            rot_inplace_ = rot_server_->acceptNewGoal();
+          }
+          if(navigate_server_->isPreemptRequested()){
+            navigate_server_->setPreempted();
+            //TODO sustituir los flags por la maquina de estados
+            status_ = NavigationStatus::IDLE;
+
+            backwards_ = false;
+            recovery_rotation_ = false;
+            aproximated_ = false;
+            phase2_ = true;
+            phase1_ = true;
+            // Flags for internal states
+            traj_received_ = false;
+            vx_ = vy_ = wz_ = 0;
+          }
+          if (navigate_server_->isNewGoalAvailable())
+          {
+            ROS_INFO("Accepting new goal ");
+            navigate_goal_ = navigate_server_->acceptNewGoal();
+            global_goal_.pose = navigate_goal_->global_goal;
+            std::cout << "global_goal_: " << global_goal_.pose.position.x << " " << global_goal_.pose.position.y << " "
+                 << global_goal_.pose.orientation.z << " " << global_goal_.pose.orientation.w << std::endl;
+
+            time_count_ = ros::Time::now();
+
+            setGoalReachedFlag(0);
+          }
+          if (!checkPathTimeout() && (navigate_server_->isActive() || !aproximated_) )
+          {
+            computeGeometry();
+
+            moveNonHolon();
+         
+            publishCmdVel();
+          }
+        }
+        void SimplePathTracker::publishCmdVel()
+        {
+
+            if (navigation_paused_)
+              navigation_paused_ = false;
+            
+            fillFeedback(vx_, vy_, wz_, "ok");
+
+            speed_command_.angular.z = wz_;
+            speed_command_.linear.x = vx_;
+            speed_command_.linear.y = vy_;
+
+            twist_pub_.publish(speed_command_);
+            publishMarkers();
+          
+        }
+        bool SimplePathTracker::validateRotInPlace(int thresh)
+        {
+          bool ret = false;
+
+          theta_star_2d::checkObstacles trg;
+          trg.request.thresh.data = thresh;
+          check_rot_srv_.call(trg);
+          
+          if (trg.response.success)
+            ret = true;
+
+          return ret;
+        }
+        void SimplePathTracker::setGoalReachedFlag(bool status_)
+        {
+          if (status_ && !navigate_result_.arrived)
+          {
+            navigate_result_.arrived = true;
+            traj_received_ = false;
+
+            navigate_result_.finalAngle.data = angle_to_global_goal_;
+            navigate_result_.finalDist.data = dist_to_global_goal_;
+            navigate_server_->setSucceeded(navigate_result_, "Goal reached succesfully");
+           
+            publishZeroSpeeds();
+          }
+          else if (!status_ && navigate_result_.arrived)
+          {
+            navigate_result_.arrived = false;
+            backwards_ = false;
+            aproximated_ = false;
+            phase2_ = true;
+            phase1_ = true;
+          }
+        }
+        void SimplePathTracker::fillFeedback(const double vx, const double vy, const double wz, const std::string &text)
+        {
+            
+            navigate_fb_.header.stamp = ros::Time::now();
+            navigate_fb_.header.seq++;
+            
+            navigate_fb_.feedback.distance_to_goal.data = dist_to_global_goal_;
+
+            navigate_fb_.feedback.speed.x = vx_;
+            navigate_fb_.feedback.speed.y = vy_;
+            navigate_fb_.feedback.speed.z = wz_;
+
+            navigate_fb_.status.text = text;
+            
+            navigate_server_->publishFeedback(navigate_fb_.feedback);
+        }
+        void SimplePathTracker::publishZeroSpeeds()
+        {
+            
+            vx_ = vy_ = wz_ = 0; 
+
+            speed_command_.angular.z = wz_;
+            speed_command_.linear.x = vx_;
+            speed_command_.linear.y = vy_;  
+            
+            publishMarkers();
+            twist_pub_.publish(speed_command_);
+        }
+        void SimplePathTracker::configureMarkers()
+        {
+            markers_.resize(2);
+            // marke Speed markers_
+            markers_.at(0).header.frame_id = robot_base_frame_id_;
+            markers_.at(0).header.stamp = ros::Time::now();
+            markers_.at(0).ns = "simple_path_tracker";
+            markers_.at(0).id = 1;
+            markers_.at(0).type = visualization_msgs::Marker::ARROW;
+            markers_.at(0).action = visualization_msgs::Marker::ADD;
+            markers_.at(0).lifetime = ros::Duration(1);
+            markers_.at(0).scale.y = 0.1;
+            markers_.at(0).scale.z = 0.2;
+            markers_.at(0).pose.position.x = 0;
+            markers_.at(0).pose.position.y = 0;
+            markers_.at(0).pose.position.z = 1;
+            markers_.at(0).color.a = 1.0;
+            markers_.at(0).color.b = 1.0;
+            markers_.at(0).color.g = 1.0;
+            markers_.at(0).color.r = 0.0;
+            // Angular Speed Arrow
+            markers_.at(1).header.frame_id = robot_base_frame_id_;
+            markers_.at(1).header.stamp = ros::Time::now();
+            markers_.at(1).ns = "simple_path_tracker";
+            markers_.at(1).id = 2;
+            markers_.at(1).type = visualization_msgs::Marker::ARROW;
+            markers_.at(1).action = visualization_msgs::Marker::ADD;
+            markers_.at(1).lifetime = ros::Duration(1);
+            markers_.at(1).scale.y = 0.1;
+            markers_.at(1).scale.z = 0.2;
+            markers_.at(1).pose.position.x = 0;
+            markers_.at(1).pose.position.y = 0;
+            markers_.at(1).pose.position.z = 1;
+            markers_.at(1).color.a = 1.0;
+            markers_.at(1).color.b = 1.0;
+            markers_.at(1).color.g = 0.0;
+            markers_.at(1).color.r = 1.0;
+
+            tf2::Quaternion quat;
+            quat.setRPY(0, M_PI_2, 0);
+            markers_.at(1).pose.orientation.x = quat.getX();
+            markers_.at(1).pose.orientation.y = quat.getY();
+            markers_.at(1).pose.orientation.z = quat.getZ();
+            markers_.at(1).pose.orientation.w = quat.getW();
+        }   
+        void SimplePathTracker::publishMarkers()
+        {
+          static tf2::Quaternion quat;
+
+          quat.setRPY(0, 0, atan2(vy_, vx_));  // Create this quatern
+
+          markers_.at(0).scale.x = 2 * sqrtf(vx_ * vx_ + vy_ * vy_); //The 2 is a scale factor in order to make a bigger and visible marker
+          markers_.at(0).pose.orientation.z = quat.getZ();
+          markers_.at(0).pose.orientation.w = quat.getW();
+
+          markers_.at(1).scale.x = -2 * wz_ ;  // Minus sign is to follow right hand rule
+
+          markers_pub_.publish(markers_.at(0));
+          markers_pub_.publish(markers_.at(1));
+        }
+        void SimplePathTracker::missionFbCallback(const upo_actions::ExecuteMissionActionFeedbackConstPtr &fb)
+        {
+
+        }
+        void SimplePathTracker::localPathCallback(const trajectory_msgs::MultiDOFJointTrajectoryConstPtr &msg)
+        {
+            
+            if (navigate_server_->isActive())
+            {
+              next_point_ = msg->points[msg->points.size() > 1 ? 1 : 0];
+              traj_received_ = true;
+              last_trj_stamp_ = ros::Time::now();
+            }
+        }
+        void SimplePathTracker::dynamicReconfigureCallback(upo_path_tracker::SimplePathTrackerConfig &config, uint32_t level)
+        {
+          angle1_ = config.angle1;
+          angle2_ = config.angle2;
+          angle3_ = config.angle3;
+
+          holonomic_ = config.holonomic;
+          do_navigate_ = config.do_navigate;
+          
+          ang_max_speed_ = config.angular_max_speed;
+          lin_max_speed_ = config.linear_max_speed;
+          lin_max_speed_back_ = config.linear_max_speed_back;
+          
+          dist_margin_ = config.dist_margin;
+
+          a_ = config.a;
+          b_ = config.b;
+          b_back_ = config.b_back;
+        }
+
     }
-  }
-}  // namespace Navigators
-void SimplePathTracker::moveHolon(double finalYaw)
-{
-  double v = getVel(linMaxSpeed, b, dist2GlobalGoal);
-
-  Vx = cos(angle2NextPoint) * v;
-  Vy = sin(angle2NextPoint) * v;
-
-  Wz = getVel(angMaxSpeed, 4 * a, angle2NextPoint);
-  if (fabs(angle2NextPoint) > M_PI_2)
-  {
-    Vx /= 1.5;
-    Vy /= 1.5;
-  }
-  else if (fabs(angle2NextPoint) > M_PI_4)
-  {
-    Vx /= 1.2;
-    Vy /= 1.2;
-  }
-
-  if (dist2GlobalGoal < orientDist)
-    setRobotOrientation(finalYaw, 0, 0, angMaxSpeed, 0);
 }
-
-bool SimplePathTracker::rotationInPlace(geometry_msgs::Quaternion finalOrientation, double threshold_,
-                                        bool final = false)
-{
-  static geometry_msgs::PoseStamped robotPose;
-  static tf2::Quaternion finalQ, robotQ;
-
-  robotPose.header.frame_id = robot_frame;
-  robotPose.header.stamp = ros::Time(0);
-  robotPose.pose.orientation.w = 1;
-  robotPose = transformPose(robotPose, robot_frame, world_frame);
-
-  robotQ.setW(robotPose.pose.orientation.w);
-  robotQ.setZ(robotPose.pose.orientation.z);
-
-  finalQ.setW(finalOrientation.w);
-  finalQ.setZ(finalOrientation.z);
-
-  // This give us the angular difference to the final orientation
-  tf2Scalar shortest = tf2::angleShortestPath(robotQ, finalQ);
-  double sh = static_cast<double>(shortest);
-  cout << "Shortest: " << sh << endl;
-
-  return rotationInPlace(shortest, threshold_, final);
-}
-bool SimplePathTracker::rotationInPlace(tf2Scalar dYaw, double threshold_, bool final = false)
-{
-  static tf2::Quaternion q_rot, q_f, robotQ;
-  static geometry_msgs::PoseStamped robotPose;
-  robotPose.header.frame_id = robot_frame;
-  robotPose.header.stamp = ros::Time(0);
-  robotPose.pose.orientation.w = 1;
-  robotPose = transformPose(robotPose, robot_frame, world_frame);
-
-  robotQ.setW(robotPose.pose.orientation.w);
-  robotQ.setZ(robotPose.pose.orientation.z);
-
-  q_rot.setRPY(0, 0, dYaw);
-
-  q_f = robotQ * q_rot;
-  q_f.normalize();
-
-  /*static double angle2;
-  angle2 = tf2::angleShortestPath(robotQ, q_f);
-
-  if (angle2 > dYaw)
-  {
-      dYaw *= -1;
-  }*/
-
-  static double var;
-  var = static_cast<double>(dYaw);  // radians
-  // cout << "Rotation var: " << rad2d(var) << endl;
-  if (fabs(rad2d(var)) > threshold_)
-  {
-    if (rad2d(var) > 90)
-    {
-      var = M_PI_2;
-    }
-    else if (rad2d(var) < -90)
-    {
-      var = -M_PI_2;
-    }
-
-    Wz = getVel(final ? angMaxSpeed + 0.05 : angMaxSpeed, final ? a / 2 : a, var);  // TODO poner el 0.2 como parametro
-
-    return true;
-  }
-  else
-  {
-    Wz = 0;
-    return false;
-  }
-}
-
-void SimplePathTracker::setRobotOrientation(float finalYaw, bool goal, bool pub, float speed, float angleMargin_)
-{
-  // We receive the quaternion q in the frame map. We have to know the orientation of the robot
-  // also in the map frame
-
-  geometry_msgs::PoseStamped robotPose;
-  robotPose.header.frame_id = robot_frame;
-  robotPose.header.stamp = ros::Time(0);
-  robotPose.header.seq = rand();
-
-  robotPose.pose.position.x = 0;
-  robotPose.pose.position.y = 0;
-  robotPose.pose.position.z = 0;
-
-  robotPose.pose.orientation.w = 1;
-
-  robotPose = transformPose(robotPose, robot_frame, world_frame);
-  float robotYaw = getYawFromQuat(robotPose.pose.orientation);
-  if (robotYaw < 0)
-    robotYaw += 360;
-  if (finalYaw < 0)
-    finalYaw += 360;
-
-  float yawDif = finalYaw - robotYaw;
-
-  if (fabs(yawDif) > 180)
-    yawDif -= 360 * yawDif / fabs(yawDif);
-
-  if (fabs(yawDif) > angleMargin_)
-  {
-    // This one works VERY WELL DONT TOUCH IT, antes era 2 en vez de 3
-    Wz = 3 * (yawDif * (speed - 0.1) / (180 - angleMargin_) + speed - 180 / (180 - angleMargin_) * (speed - 0.1));
-  }
-  else if (goal)
-  {
-    setGoalReachedFlag(1);
-  }
-
-  if (pub)
-    publishCmdVel();
-}
-
-void SimplePathTracker::setGoalReachedFlag(bool status_)
-{
-  if (status_ && !navigate_result.arrived)
-  {
-    navigate_result.arrived = true;
-
-    // TODO Fill these fields correctly
-    navigate_result.finalAngle.data = angle2GlobalGoal;
-    navigate_result.finalDist.data = dist2GlobalGoal;
-    navigate_server_ptr->setSucceeded(navigate_result, "Goal reached succesfully");
-
-    trajReceived = false;
-    publishZeroVel();
-    ROS_WARN("Arrived");
-  }
-  else if (!status_ && navigate_result.arrived)
-  {
-    navigate_result.arrived = false;
-    backwards = false;
-    aproximated = false;
-    phase2 = true;
-    phase1 = true;
-  }
-}
-void SimplePathTracker::fillFeedback(double vx, double vy, double wz, bool sec_stop, std::string text_)
-{
-  navigate_fb.header.stamp = ros::Time::now();
-  navigate_fb.header.seq++;
-  navigate_fb.feedback.distance_to_goal.data = dist2GlobalGoal;
-  navigate_fb.feedback.speed.x = vx;
-  navigate_fb.feedback.speed.y = vy;
-  navigate_fb.feedback.speed.z = wz;
-  navigate_fb.feedback.security_stop = sec_stop;
-  navigate_fb.status.text = text_;
-  navigate_server_ptr->publishFeedback(navigate_fb.feedback);
-}
-/*
- *   Configuration functions
- */
-void SimplePathTracker::configureMarkers()
-{
-  markers.resize(2);
-  // Linear Speed markers
-  markers.at(0).header.frame_id = robot_frame;
-  markers.at(0).header.stamp = ros::Time();
-  markers.at(0).ns = "path_tracker";
-  markers.at(0).id = 1;
-  markers.at(0).type = visualization_msgs::Marker::ARROW;
-  markers.at(0).action = visualization_msgs::Marker::ADD;
-  markers.at(0).lifetime = ros::Duration(1);
-  markers.at(0).scale.y = 0.1;
-  markers.at(0).scale.z = 0.2;
-  markers.at(0).pose.position.x = 0;
-  markers.at(0).pose.position.y = 0;
-  markers.at(0).pose.position.z = 1;
-  markers.at(0).color.a = 1.0;
-  markers.at(0).color.b = 1.0;
-  markers.at(0).color.g = 1.0;
-  markers.at(0).color.r = 0.0;
-  // Angular Speed Arrow
-  markers.at(1).header.frame_id = robot_frame;
-  markers.at(1).header.stamp = ros::Time();
-  markers.at(1).ns = "path_tracker";
-  markers.at(1).id = 2;
-  markers.at(1).type = visualization_msgs::Marker::ARROW;
-  markers.at(1).action = visualization_msgs::Marker::ADD;
-  markers.at(1).lifetime = ros::Duration(1);
-  markers.at(1).scale.y = 0.1;
-  markers.at(1).scale.z = 0.2;
-  markers.at(1).pose.position.x = 0;
-  markers.at(1).pose.position.y = 0;
-  markers.at(1).pose.position.z = 1;
-  markers.at(1).color.a = 1.0;
-  markers.at(1).color.b = 1.0;
-  markers.at(1).color.g = 0.0;
-  markers.at(1).color.r = 1.0;
-
-  tf2::Quaternion quat;
-  quat.setRPY(0, M_PI_2, 0);
-  markers.at(1).pose.orientation.x = quat.getX();
-  markers.at(1).pose.orientation.y = quat.getY();
-  markers.at(1).pose.orientation.z = quat.getZ();
-  markers.at(1).pose.orientation.w = quat.getW();
-}
-void SimplePathTracker::publishMarkers()
-{
-  markers.at(0).scale.x = 2 * sqrtf(Vx * Vx + Vy * Vy);
-
-  static tf2::Quaternion quat;
-  static float yaw;
-
-  yaw = atan2(Vy, Vx);
-  quat.setRPY(0, 0, yaw);  // Create this quatern
-
-  markers.at(0).pose.orientation.z = quat.getZ();
-  markers.at(0).pose.orientation.w = quat.getW();
-  markers.at(1).scale.x = -2 * Wz;  // Minus sign is to follow right hand rule
-
-  markersPub.publish(markers.at(0));
-  markersPub.publish(markers.at(1));
-}
-/*
- *   Callbacks and related functions
- */
-void SimplePathTracker::localPathCb(const trajectory_msgs::MultiDOFJointTrajectoryConstPtr &msg)
-{
-  if (navigate_server_ptr->isActive())
-  {
-    nextPoint = msg->points[msg->points.size() > 1 ? 1 : 0];
-    trajReceived = true;
-    last_trj_stamp = ros::Time::now();
-    //margin->setMode(0);
-  }
-}
-void SimplePathTracker::publishZeroVel()
-{
-  Vx = 0;
-  Vy = 0;
-  Wz = 0;
-
-  vel.angular.z = Vx;
-  vel.linear.x = Vy;
-  vel.linear.y = Wz;
-
-  publishMarkers();
-  // ROS_INFO("Publishing zero vel");
-  twistPub.publish(vel);
-}
-void SimplePathTracker::navGoalCb()
-{
-}
-void SimplePathTracker::navPreemptCb()
-{
-  navigate_server_ptr->setPreempted();
-  backwards = false;
-  recoveryRotation = false;
-  aproximated = false;
-  phase2 = true;
-  phase1 = true;
-  // Flags for internal states
-  trajReceived = false;
-  // last_trj_stamp = ros::Time::now();
-  Vx = Vy = Wz = 0;
-}
-void SimplePathTracker::rotGoalCb()
-{
-}
-void SimplePathTracker::rotPreemptCb()
-{
-}
-// Aux Functions
-
-
-
-}  // namespace Navigation
-}  // namespace Upo

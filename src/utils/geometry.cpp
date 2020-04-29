@@ -13,7 +13,6 @@ namespace Upo{
 
               return y / M_PI * 180;
             }
-            
         }
     } 
 }

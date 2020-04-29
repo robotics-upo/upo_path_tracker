@@ -31,9 +31,11 @@ include_directories(
 
 #Standard path tracker node used currently in the NIx project. This one is based in the node used in arco project.
 add_executable(simple_path_tracker_node src/simple_path_tracker_node.cpp 
-                                        src/simple_path_tracker/UpoNavigationSimplePathTracker.cpp)
+                                        src/simple_path_tracker/UpoNavigationSimplePathTracker.cpp
+                                        src/utils/geometry.cpp
+                                        src/utils/transforms.cpp)
 
-target_link_libraries(simple_path_tracker_node ${catkin_LIBRARIES})
+target_link_libraries(simple_path_tracker_node ${catkin_LIBRARIES} ${PROJECT_INCLUDE_DIRS})
 add_dependencies(simple_path_tracker_node ${PROJECT_NAME}_gencfg  
                                           ${catkin_EXPORTED_TARGETS}  
                                           ${${PROJECT_NAME}_EXPORTED_TARGETS})

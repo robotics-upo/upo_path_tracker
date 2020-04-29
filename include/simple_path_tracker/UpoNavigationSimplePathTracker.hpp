@@ -2,179 +2,307 @@
 #ifndef SIMPLE_PATH_TRACKER_H_
 #define SIMPLE_PATH_TRACKER_H_
 
+#include <ros/ros.h>
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TransformStamped.h>
-#include <ros/ros.h>
+
+#include <trajectory_msgs/MultiDOFJointTrajectory.h>
+#include <trajectory_msgs/MultiDOFJointTrajectoryPoint.h>
+
+#include <visualization_msgs/Marker.h>
 
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2_ros/transform_listener.h>
 
-#include <trajectory_msgs/MultiDOFJointTrajectory.h>
-#include <trajectory_msgs/MultiDOFJointTrajectoryPoint.h>
-#include <visualization_msgs/Marker.h>
-
 #include <theta_star_2d/checkObstacles.h>
 
+#include <actionlib/server/simple_action_server.h>
 #include <upo_actions/NavigateAction.h>
 #include <upo_actions/RotationInPlaceAction.h>
+#include <upo_actions/ExecuteMissionActionFeedback.h>
+
 #include <std_srvs/Trigger.h>
 #include <tf/transform_datatypes.h>
 
-#include <actionlib/server/simple_action_server.h>
-
 #include <dynamic_reconfigure/server.h>
-#include <upo_actions/ExecuteMissionActionFeedback.h>
 #include <upo_path_tracker/SimplePathTrackerConfig.h>
+
+#include "utils/geometry.hpp"
+#include "utils/transforms.hpp"
+
 
 namespace Upo
 {
-namespace Navigation
-{
-class SimplePathTracker
-{
-  typedef actionlib::SimpleActionServer<upo_actions::NavigateAction> NavigateServer;
-  typedef actionlib::SimpleActionServer<upo_actions::RotationInPlaceAction> RotationInPlaceServer;
-
-public:
-  SimplePathTracker();
-    
-  void navigate();
-
-private:
-  void moveForward();
-  void dynReconfCb(upo_path_tracker::SimplePathTrackerConfig &config, uint32_t level);
-  void computeGeometry();
-  bool checkPathTimeout();
-  void publishMarkers();
-  void fillFeedback(double vx, double vy, double wz, bool sec_stop, std::string text_ = "ok");
-  void moveHolon(double finalYaw);
-  void moveNonHolon();
-
-  void setRobotOrientation(float finalYaw, bool goal, bool pub, float speed, float angleMargin_);
-  bool rotationInPlace(geometry_msgs::Quaternion finalOrientation, double threshold_, bool final);
-  bool rotationInPlace(tf2Scalar dYaw, double threshold_, bool final);
-  bool validateRotInPlace(int thresh = 0);
-
-  void publishZeroVel();
-  void publishCmdVel();
-  void configureMarkers();
-  void missionFbCb(const upo_actions::ExecuteMissionActionFeedbackConstPtr &fb);
-  // Callbacks
-  void localPathCb(const trajectory_msgs::MultiDOFJointTrajectoryConstPtr &msg);
-
-  // Action lib Navigation callbacks
-  void navGoalCb();
-  void navPreemptCb();
-
-  // Action lib Rotation in place Callbacks
-  void rotGoalCb();
-  void rotPreemptCb();
-  geometry_msgs::PoseStamped transformPose(trajectory_msgs::MultiDOFJointTrajectoryPoint point, std::string from,
-                                           std::string to);
-  geometry_msgs::PoseStamped transformPose(geometry_msgs::PoseStamped originalPose, std::string from, std::string to);
-
-  float getYawFromQuat(geometry_msgs::Quaternion quat);
-  void setGoalReachedFlag(bool status_);
-  inline double euclideanDistance(double x0, double y0, double x, double y)
+  namespace Navigation
   {
-    return sqrt(pow(x - x0, 2) + pow(y - y0, 2));
-  }
-  inline double euclideanDistance(geometry_msgs::PoseStamped pose1, geometry_msgs::PoseStamped pose2)
-  {
-    return euclideanDistance(pose1.pose.position.x, pose1.pose.position.y, pose2.pose.position.x,
-                             pose2.pose.position.y);
-  }
-  inline double euclideanDistance(geometry_msgs::PoseStamped next)
-  {
-    return euclideanDistance(0, 0, next.pose.position.x, next.pose.position.y);
-  }
-  /**
-   *  Aux function to get an angle in radians and viceversa
-   *  @angle to convert to radians
-   **/
-  inline float d2rad(float angle)
-  {
-    return angle / 180 * M_PI;
-  }
-  inline float rad2d(float angle)
-  {
-    return angle / M_PI * 180;
-  }
-  /**
-   * Exponential speed calculator
-   * @max: speed at inf
-   * @exp_const: the decay constant
-   * @var: the variable to be function of
-   * v=max*(1-exp(-exp_cons*var))
-   **/
-  inline float getVel(float max, float exp_const, float var)
-  {
-    return max * (1 - exp(-exp_const * fabs(var))) * var / fabs(var);
-  }
-  inline float getVel(double max, double exp_const, double var)
-  {
-    return max * (1 - exp(-exp_const * fabs(var))) * var / fabs(var);
-  }
+    class SimplePathTracker
+    {
+        typedef actionlib::SimpleActionServer<upo_actions::NavigateAction> NavigateServer;
+        typedef actionlib::SimpleActionServer<upo_actions::RotationInPlaceAction> RotationInPlaceServer;
+        /**
+         * @brief Generic state machine of the path tracker, each state can have some substates
+         * 
+         */
+        enum NavigationStatus{
 
-  // Flags
-  bool backwards, recoveryRotation, trajReceived, timeout, navigationPaused, aproximated;
+          IDLE = 0,
+          NAVIGATING_FORMWARD = 1,
+          NAVIGATING_BACKWARDS = 2,
+          APROXIMATION_MAN = 3,
+          PATH_TIMEOUT = 4,
+          NAVIGATION_PAUSED = 5,
+          RECOVERY_ROTATION  = 6
+        };
+      public: 
+        /**
+         * @brief Construct a new Simple Path Tracker object
+         * 
+         */
+        SimplePathTracker();
+        /**
+         * @brief Destroy the Simple Path Tracker object
+         * 
+         */
+        virtual ~SimplePathTracker() = default;
+        /**
+         * @brief 
+         * 
+         */
+        void navigate();
 
-  // Input config params
-  bool debug, doNavigate, holon, phase1, phase2;
-  double angMaxSpeed, linMaxSpeed, linMaxSpeedBack, angleMargin, distMargin, a, b, bBack, orientDist;
-  std::string robot_frame, world_frame;
+      private:
+        /**
+         * @brief 
+         * 
+         */
+        void moveForward();
+        /**
+         * @brief 
+         * 
+         * @param config 
+         * @param level 
+         */
+        void dynamicReconfigureCallback(upo_path_tracker::SimplePathTrackerConfig &config, uint32_t level);
+        /**
+         * @brief 
+         * 
+         */
+        void computeGeometry();
+        /**
+         * @brief 
+         * 
+         * @return true 
+         * @return false 
+         */
+        bool checkPathTimeout();
+        /**
+         * @brief 
+         * 
+         */
+        void publishMarkers();
+        /**
+         * @brief 
+         * 
+         * @param vx 
+         * @param vy 
+         * @param wz 
+         * @param sec_stop 
+         * @param text_ 
+         */
+        void fillFeedback(const double vx, const double vy, const double wz, const std::string &text);
+        /**
+         * @brief 
+         * 
+         * @param finalYaw 
+         */
+        void moveHolon(double final_yaw);
+        /**
+         * @brief 
+         * 
+         */
+        void moveNonHolon();
 
-  // Variables
-  // tf2::Quaternion robotQ, finalQ, q_rot, q_f;
-  // Speed
-  double Vx, Vy, Wz, ramp_speed;
-  double angle2NextPoint, dist2GlobalGoal, angle2GlobalGoal, dist2NextPoint, angleBack;
-  geometry_msgs::Twist vel;
+        /**
+         * @brief Set the Robot Orientation object
+         * 
+         * @param finalYaw 
+         * @param goal 
+         * @param pub 
+         * @param speed 
+         * @param angleMargin_ 
+         */
+        void setRobotOrientation(float final_yaw, bool goal, bool pub, float speed, float angle_margin);
+        /**
+         * @brief 
+         * 
+         * @param finalOrientation 
+         * @param threshold_ 
+         * @return true 
+         * @return false 
+         */
+        bool rotationInPlace(geometry_msgs::Quaternion finalOrientation, double threshold_, bool final);
+        /**
+         * @brief 
+         * 
+         * @param dYaw 
+         * @param threshold_ 
+         * @return true 
+         * @return false 
+         */
+        bool rotationInPlace(tf2Scalar dYaw, double threshold_, bool final);
+        /**
+         * @brief 
+         * 
+         * @param thresh 
+         * @return true 
+         * @return false 
+         */
+        bool validateRotInPlace(int thresh = 0);
+        /**
+         * @brief 
+         * 
+         */
+        void publishZeroSpeeds();
+        /**
+         * @brief 
+         * 
+         */
+        void publishCmdVel();
+        /**
+         * @brief 
+         * 
+         */
+        void configureMarkers();
+        /**
+         * @brief 
+         * 
+         * @param fb 
+         */
+        void missionFbCallback(const upo_actions::ExecuteMissionActionFeedbackConstPtr &fb);
+        /**
+         * @brief 
+         * 
+         * @param msg 
+         */
+        void localPathCallback(const trajectory_msgs::MultiDOFJointTrajectoryConstPtr &msg);
+        /**
+         * @brief Set the Goal Reached Flag object
+         * 
+         * @param status_ 
+         */
+        void setGoalReachedFlag(bool status_);
 
-  // Trajectory and related
-  trajectory_msgs::MultiDOFJointTrajectoryPoint nextPoint;
-  ros::Time last_trj_stamp, time_count;
-  geometry_msgs::PoseStamped globalGoalBlFrame, globalGoal, nextPoseBlFrame;
+        /**
+         * Exponential speed calculator
+         * @max: speed at inf
+         * @exp_const: the decay constant
+         * @var: the variable to be function of
+         * v=max*(1-exp(-exp_cons*var))
+         **/
+        inline float getVel(float max, float exp_const, float var)
+        {
+          return max * ( 1 - exp( -1.0 * exp_const * fabs(var) ) ) * var / fabs( var );
+        }
+        inline float getVel(double max, double exp_const, double var)
+        {
+          return max * ( 1 - exp( -1.0 * exp_const * fabs( var ) ) ) * var / fabs( var );
+        }
 
-  // Node components
-  std::unique_ptr<ros::NodeHandle> nh;
-  std::unique_ptr<tf2_ros::Buffer> tfBuffer;
-  std::unique_ptr<tf2_ros::TransformListener> tf2_list;
+        //Flags
+        bool backwards_ = false;
+        bool recovery_rotation_ = false;
+        bool traj_received_ = false;
+        bool phase1_ = true;
+        bool phase2_ = true;
+        bool timeout_ = false;
+        bool do_navigate_ = true;
+        bool aproximated_ = false;
+        bool navigation_paused_  = false;
 
-  ros::Publisher twistPub, markersPub;
-  ros::Subscriber localPathSub, missionFbSub;
-  ros::ServiceClient check_rot_srv;
+        NavigationStatus status_;
 
-  // Markers for RViz
-  std::vector<visualization_msgs::Marker> markers;
-  // Security margin pointer
+        //Bool parameters
+        bool debug_;
+        bool holonomic_;
+        //Double parameters
+        double ang_max_speed_;
+        double lin_max_speed_;
+        double lin_max_speed_back_;
+        double angle_margin_;
+        double dist_margin_;
+        double a_; 
+        double b_; 
+        double b_back_;
+        double orientdist_;
+        double angle1_, angle2_, angle3_;
+        double dist_aprox1_;
+        //Int parameters
+        int rot_thresh_;
+        //String parameters(frames names)
+        std::string robot_base_frame_id_;
+        std::string world_frame_id_;
+        std::string odom_frame_id_;
 
-  // Action lib server poitners
-  std::unique_ptr<NavigateServer> navigate_server_ptr;
-  std::unique_ptr<RotationInPlaceServer> rot_server_ptr;
-  // Navigate action objects
-  upo_actions::NavigateResult navigate_result;
-  upo_actions::NavigateActionFeedback navigate_fb;
-  upo_actions::NavigateGoalConstPtr navigate_goal;
-  // Rotation action objects
-  upo_actions::RotationInPlaceResult rot_result;
-  upo_actions::RotationInPlaceGoalConstPtr rot_inplace;
-  upo_actions::RotationInPlaceActionFeedback rotation_fb;
+        // Variables
+        // Speed
+        double vx_ = 0, vy_ = 0, wz_ = 0;
 
-  // angular parameters
-  double angle1, angle2, angle3;
-  std::string ns_ugv;
-  // Dyn reconfg
-  std::unique_ptr<dynamic_reconfigure::Server<upo_path_tracker::SimplePathTrackerConfig>> server;
-  std::unique_ptr<dynamic_reconfigure::Server<upo_path_tracker::SimplePathTrackerConfig>::CallbackType> f;
 
-  bool rampMode;
-  ros::ServiceClient costmap_clean_srv;
-  int rot_thresh;
-  double dist_aprox1;
-};
-}  // namespace Navigation
+        double angle_to_next_point_;
+        double dist_to_global_goal_;
+        double angle_to_global_goal_;
+        double dist_to_next_point_;
+        double angle_back_;
+        geometry_msgs::Twist speed_command_;
+
+        // Trajectory and related
+        trajectory_msgs::MultiDOFJointTrajectoryPoint next_point_;
+        ros::Time last_trj_stamp_;
+        ros::Time time_count_;
+        geometry_msgs::PoseStamped global_goal_robot_frame_;
+        geometry_msgs::PoseStamped global_goal_;
+        geometry_msgs::PoseStamped next_pose_robot_frame_;
+
+        // Node components
+        ros::NodeHandle nh_;
+        ros::NodeHandle pnh_ { "~" };
+
+        tf2_ros::Buffer tf_buffer_;
+        std::unique_ptr<tf2_ros::TransformListener> tf2_list_;
+
+        ros::Publisher twist_pub_;
+        ros::Publisher markers_pub_;
+
+        ros::Subscriber local_path_sub_;
+        ros::Subscriber mission_fb_sub_;
+
+        ros::ServiceClient check_rot_srv_;
+        ros::ServiceClient costmap_clean_srv;
+
+        // Markers for RViz
+        std::vector<visualization_msgs::Marker> markers_;
+        // Security margin pointer
+
+        // Action lib server poitners
+        std::unique_ptr<NavigateServer> navigate_server_;
+        std::unique_ptr<RotationInPlaceServer> rot_server_;
+
+        // Navigate action objects
+        upo_actions::NavigateResult navigate_result_;
+        upo_actions::NavigateActionFeedback navigate_fb_;
+        upo_actions::NavigateGoalConstPtr navigate_goal_;
+        // Rotation action objects
+        upo_actions::RotationInPlaceResult rot_result_;
+        upo_actions::RotationInPlaceGoalConstPtr rot_inplace_;
+        upo_actions::RotationInPlaceActionFeedback rotation_fb_;
+
+        // Dyn reconfg
+        std::unique_ptr<dynamic_reconfigure::Server<upo_path_tracker::SimplePathTrackerConfig>> server_;
+        std::unique_ptr<dynamic_reconfigure::Server<upo_path_tracker::SimplePathTrackerConfig>::CallbackType> f_;
+
+    };
+  }  // namespace Navigation
 }  // namespace Upo
 
 #endif /* UPO_NAVIGATION_SIMPLE_PATH_TRACKER_H_ */
