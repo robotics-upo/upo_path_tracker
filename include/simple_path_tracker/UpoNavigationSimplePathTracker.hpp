@@ -114,25 +114,8 @@ namespace Upo
         /**
          * @brief 
          * 
-         * @param finalYaw 
          */
-        void moveHolon(double final_yaw);
-        /**
-         * @brief 
-         * 
-         */
-        void moveNonHolon();
-
-        /**
-         * @brief Set the Robot Orientation object
-         * 
-         * @param finalYaw 
-         * @param goal 
-         * @param pub 
-         * @param speed 
-         * @param angleMargin_ 
-         */
-        void setRobotOrientation(float final_yaw, bool goal, bool pub, float speed, float angle_margin);
+        void calculateCmdVel();
         /**
          * @brief 
          * 

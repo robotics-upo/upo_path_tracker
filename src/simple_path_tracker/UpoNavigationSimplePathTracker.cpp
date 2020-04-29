@@ -62,11 +62,13 @@ namespace Upo{
             check_rot_srv_ = nh_.serviceClient<theta_star_2d::checkObstacles>("/custom_costmap_node/check_env");
 
             last_trj_stamp_ = ros::Time(1, 1);
+
+            status_ = NavigationStatus::IDLE;
             // Configure speed direction marker
             configureMarkers();
         }     
         //TODO Clean this function
-        void SimplePathTracker::moveNonHolon()
+        void SimplePathTracker::calculateCmdVel()
         {
             angle_back_ = angle_to_next_point_ < 0 ?  angle_to_next_point_ + M_PI: 
                                                       angle_to_next_point_ - M_PI;
@@ -219,72 +221,6 @@ namespace Upo{
             }
           }
         }  // namespace Navigators
-        void SimplePathTracker::moveHolon(double final_yaw)
-        {
-          double v = getVel(lin_max_speed_, b_, dist_to_global_goal_);
-
-          vx_ = cos(angle_to_next_point_) * v;
-          vy_ = sin(angle_to_next_point_) * v;
-
-          wz_ = getVel(ang_max_speed_, 4 * a_, angle_to_next_point_);
-          if (fabs(angle_to_next_point_) > M_PI_2)
-          {
-            vx_ /= 1.5;
-            vy_ /= 1.5;
-          }
-          else if (fabs(angle_to_next_point_) > M_PI_4)
-          {
-            vx_ /= 1.2;
-            vy_ /= 1.2;
-          }
-
-          if (dist_to_global_goal_ < orientdist_)
-            setRobotOrientation(final_yaw, 0, 0, ang_max_speed_, 0);
-        }
-        //TODO Clean this function
-        void SimplePathTracker::setRobotOrientation(float final_yaw, bool goal, bool pub, float speed, float angle_margin_)
-        {
-          // We receive the quaternion q in the frame map. We have to know the orientation of the robot
-          // also in the map frame
-
-          geometry_msgs::PoseStamped robotPose;
-          robotPose.header.frame_id = robot_base_frame_id_;
-          robotPose.header.stamp = ros::Time(0);
-          robotPose.header.seq = rand();
-
-          robotPose.pose.position.x = 0;
-          robotPose.pose.position.y = 0;
-          robotPose.pose.position.z = 0;
-
-          robotPose.pose.orientation.w = 1;
-
-          robotPose = transformPose(robotPose, robot_base_frame_id_, world_frame_id_,tf_buffer_);
-          
-          float robotYaw = getYawFromQuat(robotPose.pose.orientation);
-
-          if (robotYaw < 0)
-            robotYaw += 360;
-          if (final_yaw < 0)
-            final_yaw += 360;
-
-          float yaw_diff = final_yaw - robotYaw;
-
-          if (fabs(yaw_diff) > 180)
-            yaw_diff -= 360 * yaw_diff / fabs(yaw_diff);
-
-          if (fabs(yaw_diff) > angle_margin_)
-          {
-            // This one works VERY WELL DONT TOUCH IT, antes era 2 en vez de 3
-            wz_ = 3 * (yaw_diff * (speed - 0.1) / (180 - angle_margin_) + speed - 180 / (180 - angle_margin_) * (speed - 0.1));
-          }
-          else if (goal)
-          {
-            setGoalReachedFlag(1);
-          }
-
-          if (pub)
-            publishCmdVel();
-        }
         //TODO clean
         bool SimplePathTracker::rotationInPlace(geometry_msgs::Quaternion finalOrientation, double threshold_,
                                                 bool final = false)
@@ -415,7 +351,7 @@ namespace Upo{
           {
             computeGeometry();
 
-            moveNonHolon();
+            calculateCmdVel();
          
             publishCmdVel();
           }
