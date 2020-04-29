@@ -160,12 +160,6 @@ namespace Upo
         /**
          * @brief 
          * 
-         * @param fb 
-         */
-        void missionFbCallback(const upo_actions::ExecuteMissionActionFeedbackConstPtr &fb);
-        /**
-         * @brief 
-         * 
          * @param msg 
          */
         void localPathCallback(const trajectory_msgs::MultiDOFJointTrajectoryConstPtr &msg);
@@ -258,7 +252,6 @@ namespace Upo
         ros::Publisher markers_pub_;
 
         ros::Subscriber local_path_sub_;
-        ros::Subscriber mission_fb_sub_;
 
         ros::ServiceClient check_rot_srv_;
         ros::ServiceClient costmap_clean_srv;

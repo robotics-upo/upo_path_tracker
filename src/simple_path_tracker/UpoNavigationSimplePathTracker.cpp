@@ -48,8 +48,7 @@ namespace Upo{
 
             local_path_sub_ = nh_.subscribe<trajectory_msgs::MultiDOFJointTrajectory>("/local_planner_node/local_path", 2,
                                                                                    &SimplePathTracker::localPathCallback, this);
-            mission_fb_sub_ = nh_.subscribe<upo_actions::ExecuteMissionActionFeedback>("/Execute_Mission/feedback", 1,
-                                                                                    &SimplePathTracker::missionFbCallback, this);
+           
             // Navigate action server configuration
             navigate_server_.reset(new NavigateServer(pnh_, "/SimplePathTrackerActionServer", false));
             navigate_server_->start();
@@ -221,16 +220,16 @@ namespace Upo{
             }
           }
         }  // namespace Navigators
-        //TODO clean
         bool SimplePathTracker::rotationInPlace(geometry_msgs::Quaternion finalOrientation, double threshold_,
                                                 bool final = false)
         {
-          static geometry_msgs::PoseStamped robotPose;
-          static tf2::Quaternion finalQ, robotQ;
+          geometry_msgs::PoseStamped robotPose;
+          tf2::Quaternion finalQ, robotQ;
 
           robotPose.header.frame_id = robot_base_frame_id_;
-          robotPose.header.stamp = ros::Time(0);
+          robotPose.header.stamp = ros::Time::now();
           robotPose.pose.orientation.w = 1;
+
           robotPose = transformPose(robotPose, robot_base_frame_id_, world_frame_id_, tf_buffer_);
 
           robotQ.setW(robotPose.pose.orientation.w);
@@ -246,11 +245,13 @@ namespace Upo{
 
           return rotationInPlace(shortest, threshold_, final);
         }
-        //TODO clean
         bool SimplePathTracker::rotationInPlace(tf2Scalar dYaw, double threshold_, bool final = false)
         {
-          static tf2::Quaternion q_rot, q_f, robotQ;
-          static geometry_msgs::PoseStamped robotPose;
+          bool ret = true;
+
+          tf2::Quaternion q_rot, q_f, robotQ;
+          geometry_msgs::PoseStamped robotPose;
+
           robotPose.header.frame_id = robot_base_frame_id_;
           robotPose.header.stamp = ros::Time(0);
           robotPose.pose.orientation.w = 1;
@@ -264,34 +265,21 @@ namespace Upo{
           q_f = robotQ * q_rot;
           q_f.normalize();
 
-         
-          static double var;
-          var = static_cast<double>(dYaw);  // radians
-          // std::cout << "Rotation var: " << rad2Deg(var) << std::endl;
-          if (fabs(rad2Deg(var)) > threshold_)
+          double rotation = static_cast<double>(dYaw);  // radians
+          // std::cout << "Rotation rotation: " << rad2Deg(rotation) << std::endl;
+          if (fabs(rotation) > deg2Rad(threshold_))
           {
-
-            if (rad2Deg(var) > 90)
-            {
-              var = M_PI_2;
-            }
-            else if (rad2Deg(var) < -90)
-            {
-              var = -M_PI_2;
-            }
-
-            wz_ = getVel(final ? ang_max_speed_ + 0.05 : ang_max_speed_, final ? a_ / 2 : a_, var);  // TODO poner el 0.2 como parametro
-
-            return true;
+            std::clamp(rotation,-M_PI_2, M_PI_2);
+            wz_ = getVel(final ? ang_max_speed_ + 0.05 : ang_max_speed_, final ? a_ / 2 : a_, rad2Deg(rotation));  // TODO poner el 0.2 como parametro
           }
           else
           {
             wz_ = 0;
-            return false;
+            ret = false;
           }
+
+          return ret;
         }
-        //TODO clean
-        
         void SimplePathTracker::computeGeometry()
         {
           next_pose_robot_frame_ = transformPose(next_point_, world_frame_id_, robot_base_frame_id_, tf_buffer_);
@@ -314,7 +302,6 @@ namespace Upo{
           return ret;
         }  // namespace Navigators
         //TODO clean
-
         void SimplePathTracker::navigate()
         {
           if (rot_server_->isNewGoalAvailable())
@@ -494,10 +481,6 @@ namespace Upo{
 
           markers_pub_.publish(markers_.at(0));
           markers_pub_.publish(markers_.at(1));
-        }
-        void SimplePathTracker::missionFbCallback(const upo_actions::ExecuteMissionActionFeedbackConstPtr &fb)
-        {
-
         }
         void SimplePathTracker::localPathCallback(const trajectory_msgs::MultiDOFJointTrajectoryConstPtr &msg)
         {
