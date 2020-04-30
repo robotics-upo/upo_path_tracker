@@ -44,7 +44,7 @@ namespace Upo{
               return nextPoseStamped;
             }
 
-            tf2::Matrix3x3 &getCurrentOrientation(const tf2_ros::Buffer &tf_buffer,
+            tf2::Matrix3x3 getCurrentOrientation(const tf2_ros::Buffer &tf_buffer,
                                                   const std::string &base_frame,
                                                   const std::string &reference_frame){
               

@@ -46,7 +46,7 @@ namespace Upo{
              * @param reference_frame 
              * @return tf2::Matrix3x3 &  
              */
-            tf2::Matrix3x3 &getCurrentOrientation(const tf2_ros::Buffer &tf_buffer,
+            tf2::Matrix3x3 getCurrentOrientation(const tf2_ros::Buffer &tf_buffer,
                                                   const std::string &base_frame = "base_link",
                                                   const std::string &reference_frame = "world" );
             
