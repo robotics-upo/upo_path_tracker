@@ -108,8 +108,8 @@ namespace Upo
         /**
          * @brief 
          * 
-         * @param finalOrientation 
-         * @param threshold_ 
+         * @param final_orientation 
+         * @param threshold 
          * @return true 
          * @return false 
          */
@@ -117,8 +117,8 @@ namespace Upo
         /**
          * @brief 
          * 
-         * @param dYaw 
-         * @param threshold_ 
+         * @param diff_yaw 
+         * @param threshold 
          * @return true 
          * @return false 
          */
@@ -165,21 +165,17 @@ namespace Upo
          */
         void dynamicReconfigureCallback(upo_path_tracker::SimplePathTrackerConfig &config, uint32_t level);
        
-
         /**
-         * Exponential speed calculator
-         * @max: speed at inf
-         * @exp_const: the decay constant
-         * @var: the variable to be function of
-         * v=max*(1-exp(-exp_cons*var))
-         **/
-        inline float getVel(float max, float exp_const, float var)
+         * @brief Get the Vel object
+         * 
+         * @param max 
+         * @param exp_const 
+         * @param var 
+         * @return float 
+         */
+        inline double getVel(double max, double exp_const, double var)
         {
-          return max * ( 1 - exp( -1.0 * exp_const * fabs(var) ) ) * var / fabs( var );
-        }
-        inline float getVel(double max, double exp_const, double var)
-        {
-          return max * ( 1 - exp( -1.0 * exp_const * fabs( var ) ) ) * var / fabs( var );
+          return max * ( 1 - exp( -1.0 * exp_const * std::fabs( var ) ) ) * var / std::abs( var );
         }
 
         //Flags
