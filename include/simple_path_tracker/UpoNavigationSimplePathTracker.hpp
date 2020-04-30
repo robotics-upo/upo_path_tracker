@@ -113,7 +113,7 @@ namespace Upo
          * @return true 
          * @return false 
          */
-        bool rotationInPlace(geometry_msgs::Quaternion finalOrientation, double threshold_, bool final);
+        bool rotationInPlace(const geometry_msgs::Quaternion &final_orientation,const double &threshold, bool final);
         /**
          * @brief 
          * 
@@ -122,7 +122,7 @@ namespace Upo
          * @return true 
          * @return false 
          */
-        bool rotationInPlace(tf2Scalar dYaw, double threshold_, bool final);
+        bool rotationInPlace(const double &diff_yaw,const double &threshold, bool final);
         /**
          * @brief 
          * 
@@ -185,25 +185,22 @@ namespace Upo
         //Flags
         bool do_navigate_ = true;
 
-        NavigationStatus status_, status_before_timeout_;
+        NavigationStatus status_ =  NavigationStatus::IDLE;
+        NavigationStatus status_before_timeout_;
 
-        //Bool parameters
-        bool debug_;
-        bool holonomic_;
         //Double parameters
         double ang_max_speed_;
         double lin_max_speed_;
         double lin_max_speed_back_;
         double angle_margin_;
-        double dist_margin_;
+        double angle1_, angle2_, angle3_;
+        double aprox_distance_;
+        double dist_aprox1_;
         double a_; 
         double b_; 
         double b_back_;
-        double orientdist_;
-        double angle1_, angle2_, angle3_;
-        double dist_aprox1_;
         double timeout_time_;
-
+        ros::Duration backwards_duration_;
         //Int parameters
         int rot_thresh_;
         //String parameters(frames names)
@@ -215,7 +212,6 @@ namespace Upo
         // Speed
         double vx_ = 0, vy_ = 0, wz_ = 0;
 
-
         double angle_to_next_point_;
         double dist_to_global_goal_;
         double angle_to_global_goal_;
@@ -226,7 +222,7 @@ namespace Upo
         // Trajectory and related
         trajectory_msgs::MultiDOFJointTrajectoryPoint next_point_;
         ros::Time last_trj_stamp_;
-        ros::Time time_count_;
+        ros::Time backwards_time_counter_;
         geometry_msgs::PoseStamped global_goal_robot_frame_;
         geometry_msgs::PoseStamped global_goal_;
         geometry_msgs::PoseStamped next_pose_robot_frame_;

@@ -16,28 +16,35 @@ namespace Upo{
             *f_ = boost::bind(&SimplePathTracker::dynamicReconfigureCallback, this, _1, _2);
             server_->setCallback(*f_);
 
-            nh_.param("debug", debug_, true);
-            nh_.param("holonomic", holonomic_, true);
 
             nh_.param("angular_max_speed", ang_max_speed_, 0.4);
             nh_.param("linear_max_speed", lin_max_speed_, 0.2);
             nh_.param("linear_max_speed_back", lin_max_speed_back_, 0.2);
             nh_.param("angle_margin", angle_margin_, 10.0);
-            nh_.param("dist_margin", dist_margin_, 0.35);
+            nh_.param("start_aproximation_distance", aprox_distance_, 0.35);
             nh_.param("a", a_, 0.5);
             nh_.param("b", b_, 0.5);
             nh_.param("b_back", b_back_, 0.5);
-            nh_.param("start_orientate_dist", orientdist_, 0.5);
             nh_.param("angle1", angle1_, 20.0);
             nh_.param("angle2", angle2_, 65.0);
             nh_.param("angle3", angle3_, 15.0);
             nh_.param("dist_aprox1_", dist_aprox1_, 0.05);
             nh_.param("local_paths_timeout", timeout_time_, 1.0);
+
+            
             nh_.param("rot_thresh", rot_thresh_, 350);
 
             nh_.param("robot_base_frame", robot_base_frame_id_, (std::string) "base_link");
             nh_.param("world_frame_id_", world_frame_id_, (std::string) "map");
             nh_.param("odom_frame", odom_frame_id_, (std::string) "odom");
+
+            double rate;
+            nh_.param("rate", rate, 40.0);
+            navigate_timer_ = nh_.createTimer(ros::Duration(1/rate), &SimplePathTracker::navigate, this);
+
+            double back_dur;
+            nh_.param("backwards_duration", back_dur, 30.0);
+            backwards_duration_ = ros::Duration(back_dur);
 
 
             costmap_clean_srv = nh_.serviceClient<std_srvs::Trigger>("/custom_costmap_node/reset_costmap");
@@ -60,24 +67,21 @@ namespace Upo{
             // Service to check if it's possible a rotation in place consulting the costmap
             check_rot_srv_ = nh_.serviceClient<theta_star_2d::checkObstacles>("/custom_costmap_node/check_env");
 
-            last_trj_stamp_ = ros::Time(1, 1);
-
             status_ = NavigationStatus::IDLE;
             
-            double rate;
-            nh_.param("rate", rate, 40.0);
-            navigate_timer_ = nh_.createTimer(ros::Duration(1/rate), &SimplePathTracker::navigate, this);
             // Configure speed direction marker
             configureMarkers();
         }     
         void SimplePathTracker::calculateCmdVel()
         {
-            
+          
+          computeGeometry();
+          
           switch (status_)
           {
             case NAVIGATING_FORMWARD:
             {
-              if(dist_to_global_goal_ > dist_margin_){
+              if(dist_to_global_goal_ > aprox_distance_){
 
                 if (std::fabs(angle_to_next_point_) > deg2Rad(angle1_))  // Rot in place
                 {
@@ -90,7 +94,7 @@ namespace Upo{
                   else
                   {
                     status_ = NavigationStatus::NAVIGATING_BACKWARDS;
-                    time_count_ = ros::Time::now();
+                    backwards_time_counter_ = ros::Time::now();
                   }
 
                 }else{
@@ -105,6 +109,7 @@ namespace Upo{
                 std_srvs::Trigger trg;
                 costmap_clean_srv.call(trg);
               }
+              publishCmdVel();
 
               break;
             }
@@ -113,7 +118,7 @@ namespace Upo{
                   angle_back_ = angle_to_next_point_ < 0 ?  angle_to_next_point_ + M_PI: 
                                                     angle_to_next_point_ - M_PI;
 
-                  if (ros::Time::now() - time_count_ > ros::Duration(100) && validateRotation())  //TODO Set backwards duration as parameter
+                  if (ros::Time::now() - backwards_time_counter_ > backwards_duration_ && validateRotation()) 
                   {
                     status_ = NavigationStatus::NAVIGATING_FORMWARD;
                   }
@@ -127,6 +132,7 @@ namespace Upo{
                     vx_ = -getVel(lin_max_speed_back_, b_back_, dist_to_global_goal_);
                     rotationInPlace(angle_back_, 0, false);
                   }
+              publishCmdVel();
 
               break;
             }
@@ -135,19 +141,14 @@ namespace Upo{
               wz_ = 0;
 
               double dist = global_goal_robot_frame_.pose.position.x;
-              std::clamp(vx_, -1 * dist, dist);
 
-              if (global_goal_robot_frame_.pose.position.x > 0 && global_goal_robot_frame_.pose.position.x < dist_aprox1_)
-              {
-                vx_ = 0.01;
-              }
-              else if (global_goal_robot_frame_.pose.position.x < 0 && global_goal_robot_frame_.pose.position.x > -dist_aprox1_)
-              {
-                vx_ = - 0.01;
-              }else{
+              std::clamp(vx_, -1 * dist, dist);
+              vx_ /= 3;
+
+              if(std::fabs(dist) > dist_aprox1_)
                 status_ = NavigationStatus::APROXIMATION_MAN_2;
-                vx_ = 0;
-              }
+
+              publishCmdVel();
 
               break;
             }
@@ -165,7 +166,7 @@ namespace Upo{
 
               if (validateRotation(rot_thresh_))
               {
-                if( !rotationInPlace(rotval, 5, true) )  //TODO Set this 5 as param
+                if( !rotationInPlace(rotval, angle_margin_, true) ) 
                 {
                   setFinalNavigationStatus(true);
                 }
@@ -175,7 +176,7 @@ namespace Upo{
               {
                 setFinalNavigationStatus(true);
               }
-
+              publishCmdVel();
               break;
             }
             default:
@@ -186,7 +187,7 @@ namespace Upo{
           }
 
         } 
-        bool SimplePathTracker::rotationInPlace(geometry_msgs::Quaternion finalOrientation, double threshold_,
+        bool SimplePathTracker::rotationInPlace(const geometry_msgs::Quaternion &final_orientation,const double &threshold,
                                                 bool final = false)
         {
           geometry_msgs::PoseStamped robotPose;
@@ -201,42 +202,24 @@ namespace Upo{
           robotQ.setW(robotPose.pose.orientation.w);
           robotQ.setZ(robotPose.pose.orientation.z);
 
-          finalQ.setW(finalOrientation.w);
-          finalQ.setZ(finalOrientation.z);
+          finalQ.setW(final_orientation.w);
+          finalQ.setZ(final_orientation.z);
 
           // This give us the angular difference to the final orientation
           tf2Scalar shortest = tf2::angleShortestPath(robotQ, finalQ);
           double sh = static_cast<double>(shortest);
           std::cout << "Shortest: " << sh << std::endl;
 
-          return rotationInPlace(shortest, threshold_, final);
+          return rotationInPlace(shortest, threshold, final);
         }
-        bool SimplePathTracker::rotationInPlace(tf2Scalar dYaw, double threshold_, bool final = false)
+        bool SimplePathTracker::rotationInPlace(const double &diff_yaw,const double &threshold, bool final = false)
         {
           bool ret = true;
 
-          tf2::Quaternion q_rot, q_f, robotQ;
-          geometry_msgs::PoseStamped robotPose;
-
-          robotPose.header.frame_id = robot_base_frame_id_;
-          robotPose.header.stamp = ros::Time(0);
-          robotPose.pose.orientation.w = 1;
-          robotPose = transformPose(robotPose, robot_base_frame_id_, world_frame_id_, tf_buffer_);
-
-          robotQ.setW(robotPose.pose.orientation.w);
-          robotQ.setZ(robotPose.pose.orientation.z);
-
-          q_rot.setRPY(0, 0, dYaw);
-
-          q_f = robotQ * q_rot;
-          q_f.normalize();
-
-          double rotation = static_cast<double>(dYaw);  // radians
-          // std::cout << "Rotation rotation: " << rad2Deg(rotation) << std::endl;
-          if (fabs(rotation) > deg2Rad(threshold_))
+          if (std::fabs(diff_yaw) > deg2Rad(threshold))
           {
-            std::clamp(rotation,-M_PI_2, M_PI_2);
-            wz_ = getVel(final ? ang_max_speed_ + 0.05 : ang_max_speed_, final ? a_ / 2 : a_, rad2Deg(rotation)); 
+            std::clamp(diff_yaw,-M_PI_2, M_PI_2);
+            wz_ = getVel(final ? ang_max_speed_ + 0.05 : ang_max_speed_, final ? a_ / 2 : a_, rad2Deg(diff_yaw)); 
           }
           else
           {
@@ -255,7 +238,6 @@ namespace Upo{
           angle_to_next_point_ = atan2(next_pose_robot_frame_.pose.position.y, next_pose_robot_frame_.pose.position.x);
           dist_to_next_point_ = euclideanDistance(next_pose_robot_frame_);
         }
-        //TODO clean
         void SimplePathTracker::navigate(const ros::TimerEvent &event)
         {
 
@@ -268,14 +250,14 @@ namespace Upo{
             rot_server_->setPreempted();
             status_ = NavigationStatus::IDLE;
           } 
-          
+
           if (navigate_server_->isNewGoalAvailable())
           {
 
             navigate_goal_ = navigate_server_->acceptNewGoal();
             global_goal_.pose = navigate_goal_->global_goal;
             last_trj_stamp_ = ros::Time::now();
-            time_count_ = ros::Time::now();
+            backwards_time_counter_ = ros::Time::now();
 
           }
           
@@ -285,14 +267,9 @@ namespace Upo{
           }
 
 
-          if ( navigate_server_->isActive() )
-          {
-            computeGeometry();
-
+          if ( navigate_server_->isActive() )          
             calculateCmdVel();
-         
-            publishCmdVel();
-          }
+          
         }
         void SimplePathTracker::publishCmdVel()
         {
@@ -453,19 +430,25 @@ namespace Upo{
           angle2_ = config.angle2;
           angle3_ = config.angle3;
 
-          holonomic_ = config.holonomic;
-          do_navigate_ = config.do_navigate;
-          
           ang_max_speed_ = config.angular_max_speed;
           lin_max_speed_ = config.linear_max_speed;
           lin_max_speed_back_ = config.linear_max_speed_back;
           
-          dist_margin_ = config.dist_margin;
+          aprox_distance_ = config.dist_margin;
 
           a_ = config.a;
           b_ = config.b;
           b_back_ = config.b_back;
-        }
 
+          do_navigate_ = config.do_navigate;
+          
+          if( do_navigate_ && status_ == NavigationStatus::NAVIGATION_PAUSED ){//TODO Not tested
+            status_ = status_before_timeout_;
+          }
+          if( !do_navigate_ ){
+            status_before_timeout_ = status_;
+            status_ = NavigationStatus::NAVIGATION_PAUSED;
+          }
+        }
     }
 }
