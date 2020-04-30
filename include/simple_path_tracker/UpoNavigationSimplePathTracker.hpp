@@ -77,7 +77,7 @@ namespace Upo
          * 
          * @param event 
          */
-        void navigate(const ros::TimerEvent &event);
+        void processActionsStatus(const ros::TimerEvent &event);
         
         /**
          * @brief 

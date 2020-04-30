@@ -38,7 +38,7 @@ namespace Upo{
 
             double rate;
             nh_.param("rate", rate, 40.0);
-            navigate_timer_ = nh_.createTimer(ros::Duration(1/rate), &SimplePathTracker::navigate, this);
+            navigate_timer_ = nh_.createTimer(ros::Duration(1/rate), &SimplePathTracker::processActionsStatus, this);
 
             double back_dur;
             nh_.param("backwards_duration", back_dur, 30.0);
@@ -221,7 +221,7 @@ namespace Upo{
           angle_to_next_point_ = atan2(next_pose_robot_frame_.pose.position.y, next_pose_robot_frame_.pose.position.x);
           dist_to_next_point_ = euclideanDistance(next_pose_robot_frame_);
         }
-        void SimplePathTracker::navigate(const ros::TimerEvent &event)
+        void SimplePathTracker::processActionsStatus(const ros::TimerEvent &event)
         {
 
           if( rot_server_->isNewGoalAvailable() ) 
@@ -236,12 +236,9 @@ namespace Upo{
 
           if (navigate_server_->isNewGoalAvailable())
           {
-
             navigate_goal_ = navigate_server_->acceptNewGoal();
             global_goal_.pose = navigate_goal_->global_goal;
             last_trj_stamp_ = ros::Time::now();
-            backwards_time_counter_ = ros::Time::now();
-
           }
           
           if(navigate_server_->isPreemptRequested()){
