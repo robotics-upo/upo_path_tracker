@@ -40,6 +40,7 @@ namespace Upo
     {
         typedef actionlib::SimpleActionServer<upo_actions::NavigateAction> NavigateServer;
         typedef actionlib::SimpleActionServer<upo_actions::RotationInPlaceAction> RotationInPlaceServer;
+
         /**
          * @brief Generic state machine of the path tracker, each state can have some substates
          * 
@@ -54,7 +55,9 @@ namespace Upo
           PATH_TIMEOUT = 5,
           NAVIGATION_PAUSED = 6,
           RECOVERY_ROTATION  = 7
+
         };
+
       public: 
         /**
          * @brief Construct a new Simple Path Tracker object
@@ -66,35 +69,21 @@ namespace Upo
          * 
          */
         virtual ~SimplePathTracker() = default;
-        /**
-         * @brief 
-         * 
-         */
-        void navigate();
 
       private:
+      
         /**
          * @brief 
          * 
+         * @param event 
          */
-        void moveForward();
-        /**
-         * @brief 
-         * 
-         * @param config 
-         * @param level 
-         */
-        void dynamicReconfigureCallback(upo_path_tracker::SimplePathTrackerConfig &config, uint32_t level);
+        void navigate(const ros::TimerEvent &event);
+        
         /**
          * @brief 
          * 
          */
         void computeGeometry();
-        /**
-         * @brief 
-         * 
-         */
-        void publishMarkers();
         /**
          * @brief 
          * 
@@ -110,6 +99,12 @@ namespace Upo
          * 
          */
         void calculateCmdVel();
+         /**
+         * @brief Set the Goal Reached Flag object
+         * 
+         * @param status_ 
+         */
+        void setFinalNavigationStatus(bool arrived_succesfully);
         /**
          * @brief 
          * 
@@ -135,7 +130,7 @@ namespace Upo
          * @return true 
          * @return false 
          */
-        bool validateRotInPlace(int thresh = 0);
+        bool validateRotation(int thresh = 0);
         /**
          * @brief 
          * 
@@ -150,6 +145,11 @@ namespace Upo
          * @brief 
          * 
          */
+        void publishMarkers();
+        /**
+         * @brief 
+         * 
+         */
         void configureMarkers();
         /**
          * @brief 
@@ -158,11 +158,13 @@ namespace Upo
          */
         void localPathCallback(const trajectory_msgs::MultiDOFJointTrajectoryConstPtr &msg);
         /**
-         * @brief Set the Goal Reached Flag object
+         * @brief 
          * 
-         * @param status_ 
+         * @param config 
+         * @param level 
          */
-        void setGoalReachedFlag(bool status_);
+        void dynamicReconfigureCallback(upo_path_tracker::SimplePathTrackerConfig &config, uint32_t level);
+       
 
         /**
          * Exponential speed calculator
@@ -201,7 +203,7 @@ namespace Upo
         double angle1_, angle2_, angle3_;
         double dist_aprox1_;
         double timeout_time_;
-        
+
         //Int parameters
         int rot_thresh_;
         //String parameters(frames names)
@@ -244,6 +246,7 @@ namespace Upo
         ros::ServiceClient check_rot_srv_;
         ros::ServiceClient costmap_clean_srv;
 
+        ros::Timer navigate_timer_;
         // Markers for RViz
         std::vector<visualization_msgs::Marker> markers_;
         // Security margin pointer

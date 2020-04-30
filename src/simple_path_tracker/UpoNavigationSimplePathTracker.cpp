@@ -63,6 +63,10 @@ namespace Upo{
             last_trj_stamp_ = ros::Time(1, 1);
 
             status_ = NavigationStatus::IDLE;
+            
+            double rate;
+            nh_.param("rate", rate, 40.0);
+            navigate_timer_ = nh_.createTimer(ros::Duration(1/rate), &SimplePathTracker::navigate, this);
             // Configure speed direction marker
             configureMarkers();
         }     
@@ -71,9 +75,6 @@ namespace Upo{
             
           switch (status_)
           {
-            case IDLE:
-              publishZeroSpeeds();
-              break;
             case NAVIGATING_FORMWARD:
             {
               if(dist_to_global_goal_ > dist_margin_){
@@ -81,7 +82,7 @@ namespace Upo{
                 if (std::fabs(angle_to_next_point_) > deg2Rad(angle1_))  // Rot in place
                 {
                   
-                  if ( (fabs(angle_to_next_point_) < deg2Rad(angle2_) || validateRotInPlace()) )
+                  if ( (fabs(angle_to_next_point_) < deg2Rad(angle2_) || validateRotation()) )
                   {
                     rotationInPlace(angle_to_next_point_, 0, true);
                     vx_ = 0;
@@ -112,7 +113,7 @@ namespace Upo{
                   angle_back_ = angle_to_next_point_ < 0 ?  angle_to_next_point_ + M_PI: 
                                                     angle_to_next_point_ - M_PI;
 
-                  if (ros::Time::now() - time_count_ > ros::Duration(100) && validateRotInPlace())  //TODO Set backwards duration as parameter
+                  if (ros::Time::now() - time_count_ > ros::Duration(100) && validateRotation())  //TODO Set backwards duration as parameter
                   {
                     status_ = NavigationStatus::NAVIGATING_FORMWARD;
                   }
@@ -162,19 +163,17 @@ namespace Upo{
               
               removeMultipleRotations(rotval);
 
-              if (validateRotInPlace(rot_thresh_))
+              if (validateRotation(rot_thresh_))
               {
                 if( !rotationInPlace(rotval, 5, true) )  //TODO Set this 5 as param
                 {
-                  setGoalReachedFlag(1);
-                  status_ = NavigationStatus::IDLE;
+                  setFinalNavigationStatus(true);
                 }
                 
               }
               else
               {
-                setGoalReachedFlag(1);
-                status_ = NavigationStatus::IDLE;
+                setFinalNavigationStatus(true);
               }
 
               break;
@@ -257,20 +256,19 @@ namespace Upo{
           dist_to_next_point_ = euclideanDistance(next_pose_robot_frame_);
         }
         //TODO clean
-        void SimplePathTracker::navigate()
+        void SimplePathTracker::navigate(const ros::TimerEvent &event)
         {
-          if (rot_server_->isNewGoalAvailable())
+
+          if( rot_server_->isNewGoalAvailable() ) 
           {
             rot_inplace_ = rot_server_->acceptNewGoal();
+            status_ = NavigationStatus::RECOVERY_ROTATION;
           }
-          if(navigate_server_->isPreemptRequested()){
-            navigate_server_->setPreempted();
-            //TODO sustituir los flags por la maquina de estados
+          if( rot_server_->isPreemptRequested() ){
+            rot_server_->setPreempted();
             status_ = NavigationStatus::IDLE;
-            
-            
-            vx_ = vy_ = wz_ = 0;
-          }
+          } 
+          
           if (navigate_server_->isNewGoalAvailable())
           {
 
@@ -279,9 +277,14 @@ namespace Upo{
             last_trj_stamp_ = ros::Time::now();
             time_count_ = ros::Time::now();
 
-            setGoalReachedFlag(0);
           }
           
+          if(navigate_server_->isPreemptRequested()){
+            navigate_server_->setPreempted();
+            setFinalNavigationStatus(false);
+          }
+
+
           if ( navigate_server_->isActive() )
           {
             computeGeometry();
@@ -304,7 +307,7 @@ namespace Upo{
             publishMarkers();
           
         }
-        bool SimplePathTracker::validateRotInPlace(int thresh)
+        bool SimplePathTracker::validateRotation(int thresh)
         {
           bool ret = false;
 
@@ -317,22 +320,25 @@ namespace Upo{
 
           return ret;
         }
-        void SimplePathTracker::setGoalReachedFlag(bool status_)
+        void SimplePathTracker::setFinalNavigationStatus(bool arrived_succesfully)
         {
-          if (status_ && !navigate_result_.arrived)
+          if (arrived_succesfully)
           {
             navigate_result_.arrived = true;
 
             navigate_result_.finalAngle.data = angle_to_global_goal_;
             navigate_result_.finalDist.data = dist_to_global_goal_;
+
             navigate_server_->setSucceeded(navigate_result_, "Goal reached succesfully");
-           
-            publishZeroSpeeds();
           }
-          else if (!status_ && navigate_result_.arrived)
+          else
           {
             navigate_result_.arrived = false;
           }
+
+          status_ = NavigationStatus::IDLE;
+          publishZeroSpeeds();
+
         }
         void SimplePathTracker::fillFeedback(const double vx, const double vy, const double wz, const std::string &text)
         {
