@@ -62,7 +62,7 @@ namespace Upo{
             // Service to check if it's possible a rotation in place consulting the costmap
             check_rot_srv_ = nh_.serviceClient<theta_star_2d::checkObstacles>("/custom_costmap_node/check_env");
             costmap_clean_srv = nh_.serviceClient<std_srvs::Trigger>("/custom_costmap_node/reset_costmap");
-            
+
             // Configure speed direction marker
             configureMarkers();
         }     
@@ -184,25 +184,14 @@ namespace Upo{
         bool SimplePathTracker::rotationInPlace(const geometry_msgs::Quaternion &final_orientation,const double &threshold,
                                                 bool final = false)
         {
-          geometry_msgs::PoseStamped robotPose;
-          tf2::Quaternion finalQ, robotQ;
-
-          robotPose.header.frame_id = robot_base_frame_id_;
-          robotPose.header.stamp = ros::Time::now();
-          robotPose.pose.orientation.w = 1;
-
-          robotPose = transformPose(robotPose, robot_base_frame_id_, world_frame_id_, tf_buffer_);
-
-          robotQ.setW(robotPose.pose.orientation.w);
-          robotQ.setZ(robotPose.pose.orientation.z);
-
-          finalQ.setW(final_orientation.w);
-          finalQ.setZ(final_orientation.z);
+          tf2::Quaternion final_orientation_q, robot_orientation;
+          final_orientation_q.setW(final_orientation.w);
+          final_orientation_q.setZ(final_orientation.z);
+          
+          getCurrentOrientation(tf_buffer_).getRotation(robot_orientation);
 
           // This give us the angular difference to the final orientation
-          tf2Scalar shortest = tf2::angleShortestPath(robotQ, finalQ);
-          double sh = static_cast<double>(shortest);
-          std::cout << "Shortest: " << sh << std::endl;
+          tf2Scalar shortest = tf2::angleShortestPath(robot_orientation, final_orientation_q);
 
           return rotationInPlace(shortest, threshold, final);
         }
