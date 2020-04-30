@@ -71,6 +71,13 @@ namespace Upo{
             {
               return angle / M_PI * 180.0;
             }
+            /**
+             * @brief It subtracts n times 360 degrees until the rotation is in the interval [-M_PI, M_PI]
+             * 
+             * @param rotation Original rotation (RADIANS)
+             * @return double Reduced rotation (RADIANS) 
+             */
+            double removeMultipleRotations(double rotation, double lower_bound = -M_PI , double upper_bound = M_PI);//TODO Not tested
         }
     }
 }

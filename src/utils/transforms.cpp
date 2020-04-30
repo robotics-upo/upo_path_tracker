@@ -43,6 +43,33 @@ namespace Upo{
 
               return nextPoseStamped;
             }
+
+            tf2::Matrix3x3 &getCurrentOrientation(const tf2_ros::Buffer &tf_buffer,
+                                                  const std::string &base_frame,
+                                                  const std::string &reference_frame){
+              
+              geometry_msgs::PoseStamped robotPose;
+              
+              tf2::Quaternion robotQ;
+              tf2::Matrix3x3 m;
+              
+              double robotYaw, rpitch, rroll; 
+              
+              robotPose.header.frame_id = base_frame;
+              robotPose.header.stamp = ros::Time::now();
+              robotPose.pose.orientation.w = 1;
+              
+              robotPose = transformPose(robotPose, base_frame, reference_frame, tf_buffer);  
+
+              robotQ.setW(robotPose.pose.orientation.w);
+              robotQ.setZ(robotPose.pose.orientation.z);
+              robotQ.normalize(); 
+              
+              m.setRotation(robotQ);
+              m.getEulerYPR(robotYaw, rpitch, rroll);
+
+              return m;
+            }
         }
     }
 }

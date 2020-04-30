@@ -32,7 +32,7 @@ namespace Upo{
             nh_.param("angle2", angle2_, 65.0);
             nh_.param("angle3", angle3_, 15.0);
             nh_.param("dist_aprox1_", dist_aprox1_, 0.05);
-
+            nh_.param("local_paths_timeout", timeout_time_, 1.0);
             nh_.param("rot_thresh", rot_thresh_, 350);
 
             nh_.param("robot_base_frame", robot_base_frame_id_, (std::string) "base_link");
@@ -66,72 +66,75 @@ namespace Upo{
             // Configure speed direction marker
             configureMarkers();
         }     
-        //TODO Clean this function
         void SimplePathTracker::calculateCmdVel()
         {
-            angle_back_ = angle_to_next_point_ < 0 ?  angle_to_next_point_ + M_PI: 
-                                                      angle_to_next_point_ - M_PI;
-
-          if (dist_to_global_goal_ > dist_margin_ && phase1_)
+            
+          switch (status_)
           {
+            case IDLE:
+              publishZeroSpeeds();
+              break;
+            case NAVIGATING_FORMWARD:
+            {
+              if(dist_to_global_goal_ > dist_margin_){
 
-            ROS_INFO_THROTTLE(0.5, "DIST: %.2f", dist_to_global_goal_);
-            ROS_INFO_THROTTLE(0.5, "Angle Back: %.2f", angle_back_);
-            ROS_INFO_THROTTLE(0.5, "Backwards: %d", backwards_);
-            ROS_INFO_THROTTLE(0.5, "angle to next point: %.2f", angle_to_next_point_);
+                if (std::fabs(angle_to_next_point_) > deg2Rad(angle1_))  // Rot in place
+                {
+                  
+                  if ( (fabs(angle_to_next_point_) < deg2Rad(angle2_) || validateRotInPlace()) )
+                  {
+                    rotationInPlace(angle_to_next_point_, 0, true);
+                    vx_ = 0;
+                  }
+                  else
+                  {
+                    status_ = NavigationStatus::NAVIGATING_BACKWARDS;
+                    time_count_ = ros::Time::now();
+                  }
 
-            if (fabs(angle_to_next_point_) > deg2Rad(angle1_))  // Rot in place
-            {
-              if (!backwards_ && (fabs(angle_to_next_point_) < deg2Rad(angle2_) || validateRotInPlace()))
-              {
-                ROS_INFO("\t 1");
-                rotationInPlace(angle_to_next_point_, 0, true);
-                vx_ = 0;
+                }else{
+
+                  vx_ = getVel(lin_max_speed_, b_, dist_to_global_goal_);
+                  vy_ = 0;
+                  rotationInPlace(angle_to_next_point_, 0, false);
+                }
+
+              }else{
+                status_ = NavigationStatus::APROXIMATION_MAN_1;
+                std_srvs::Trigger trg;
+                costmap_clean_srv.call(trg);
               }
-              else if (!backwards_)
-              {
-                ROS_INFO("Enabling backwards");
-                backwards_ = true;
-                time_count_ = ros::Time::now();
-              }
-              else if (ros::Time::now() - time_count_ > ros::Duration(100) && validateRotInPlace())  // Reset backwards
-              {
-                ROS_INFO("\t 2");
-                backwards_ = false;
-              }
-              else if (fabs(angle_back_) > fabs(deg2Rad(angle3_)))  // Too much angular distance, do only rotation in place
-              {
-                ROS_INFO("\t 3");
-                rotationInPlace(angle_back_, 0, true);
-                vx_ = 0;
-              }
-              else
-              {
-                ROS_INFO("\t 4");
-                vx_ = -getVel(lin_max_speed_back_, b_back_, dist_to_global_goal_);
-                rotationInPlace(angle_back_, 0, false);
-              }
+
+              break;
             }
-            else
+            case NAVIGATING_BACKWARDS:
             {
-              // ROS_INFO("\t 5");
-              vx_ = getVel(lin_max_speed_, b_, dist_to_global_goal_);
-              vy_ = 0;
-              rotationInPlace(angle_to_next_point_, 0, false);
+                  angle_back_ = angle_to_next_point_ < 0 ?  angle_to_next_point_ + M_PI: 
+                                                    angle_to_next_point_ - M_PI;
+
+                  if (ros::Time::now() - time_count_ > ros::Duration(100) && validateRotInPlace())  //TODO Set backwards duration as parameter
+                  {
+                    status_ = NavigationStatus::NAVIGATING_FORMWARD;
+                  }
+                  else if ( std::fabs(angle_back_) > std::fabs( deg2Rad(angle3_) ) )  // Too much angular distance, do only rotation in place
+                  {
+                    rotationInPlace(angle_back_, 0, true);
+                    vx_ = 0;
+                  }
+                  else
+                  {
+                    vx_ = -getVel(lin_max_speed_back_, b_back_, dist_to_global_goal_);
+                    rotationInPlace(angle_back_, 0, false);
+                  }
+
+              break;
             }
-          }
-          else if (!aproximated_)
-          {
-            if (phase1_)
-            {
-              phase1_ = false;
-              std_srvs::Trigger trg;
-              costmap_clean_srv.call(trg);
-            }
-            if (phase2_)  
+            case APROXIMATION_MAN_1:
             {
               wz_ = 0;
-              ROS_INFO("Fase 1");
+
+              double dist = global_goal_robot_frame_.pose.position.x;
+              std::clamp(vx_, -1 * dist, dist);
 
               if (global_goal_robot_frame_.pose.position.x > 0 && global_goal_robot_frame_.pose.position.x < dist_aprox1_)
               {
@@ -139,87 +142,51 @@ namespace Upo{
               }
               else if (global_goal_robot_frame_.pose.position.x < 0 && global_goal_robot_frame_.pose.position.x > -dist_aprox1_)
               {
-                vx_ = -0.01;
-              }
-              else
-              {
-                ROS_INFO("OUT FASE 1");
-                phase2_ = false;
+                vx_ = - 0.01;
+              }else{
+                status_ = NavigationStatus::APROXIMATION_MAN_2;
                 vx_ = 0;
               }
-              // Vx = getVel(global_goal_robot_frame_.pose.position.x < 0 ? -linMaxSpeed : linMaxSpeed, b, dist2GlobalGoal);
+
+              break;
             }
-            else
+            case APROXIMATION_MAN_2:
             {
-              ROS_INFO("2 FASE");
+              double robotYaw, rpitch, rroll;
+              getCurrentOrientation(tf_buffer_).getEulerYPR(robotYaw, rpitch, rroll);
+             
+              double rotval =  deg2Rad(angle_to_global_goal_) - robotYaw;
 
-              static geometry_msgs::PoseStamped robotPose;
-              static tf2::Quaternion robotQ;
-              static tf2::Matrix3x3 m;
-              static double robotYaw, rpitch, rroll;
+              if(angle_to_global_goal_ > 0 && robotYaw < 0 ) 
+                rotval =  deg2Rad(angle_to_global_goal_) + robotYaw;
+              
+              removeMultipleRotations(rotval);
 
-              robotPose.header.frame_id = robot_base_frame_id_;
-              robotPose.header.stamp = ros::Time(0);
-              robotPose.pose.orientation.w = 1;
-              robotPose.pose.orientation.z = 0;
-              robotPose = transformPose(robotPose, robot_base_frame_id_, world_frame_id_, tf_buffer_);
-
-              robotQ.setW(robotPose.pose.orientation.w);
-              robotQ.setZ(robotPose.pose.orientation.z);
-              robotQ.normalize();
-
-              m.setRotation(robotQ);
-              m.getEulerYPR(robotYaw, rpitch, rroll);
-
-              ROS_INFO("angle of GlobalGoal: %.2f, robotYaw: %.2f", angle_to_global_goal_, rad2Deg(robotYaw));
-              static bool aprox_rot;
-              static double rotval;
-              if (angle_to_global_goal_ * rad2Deg(robotYaw) < 0)
-              {
-                if (angle_to_global_goal_ < 0)
-                {
-                  rotval = (180 + angle_to_global_goal_) + (180 - rad2Deg(robotYaw));
-                }
-                else
-                {
-                  rotval = -((180 - angle_to_global_goal_) + (180 + rad2Deg(robotYaw)));
-                }
-              }
-              else
-              {
-                rotval = angle_to_global_goal_ - rad2Deg(robotYaw);
-              }
-              if (fabs(rotval) > 180)
-              {
-                if (rotval < 0)
-                {
-                  rotval += 360;
-                }
-                else
-                {
-                  rotval -= 360;
-                }
-              }
-              ROS_INFO("Rotation value: %.2f", rotval);
               if (validateRotInPlace(rot_thresh_))
               {
-                aprox_rot = rotationInPlace(deg2Rad(rotval), 5, true);
-                if (!aprox_rot)
+                if( !rotationInPlace(rotval, 5, true) )  //TODO Set this 5 as param
                 {
-                  aproximated_ = true;
                   setGoalReachedFlag(1);
-                  ROS_INFO("Aproximated");
+                  status_ = NavigationStatus::IDLE;
                 }
+                
               }
               else
               {
-                aproximated_ = true;
                 setGoalReachedFlag(1);
-                ROS_WARN("Arrived but not aproximated");
+                status_ = NavigationStatus::IDLE;
               }
+
+              break;
+            }
+            default:
+            {
+              publishZeroSpeeds();
+              break;
             }
           }
-        }  // namespace Navigators
+
+        } 
         bool SimplePathTracker::rotationInPlace(geometry_msgs::Quaternion finalOrientation, double threshold_,
                                                 bool final = false)
         {
@@ -270,7 +237,7 @@ namespace Upo{
           if (fabs(rotation) > deg2Rad(threshold_))
           {
             std::clamp(rotation,-M_PI_2, M_PI_2);
-            wz_ = getVel(final ? ang_max_speed_ + 0.05 : ang_max_speed_, final ? a_ / 2 : a_, rad2Deg(rotation));  // TODO poner el 0.2 como parametro
+            wz_ = getVel(final ? ang_max_speed_ + 0.05 : ang_max_speed_, final ? a_ / 2 : a_, rad2Deg(rotation)); 
           }
           else
           {
@@ -290,18 +257,6 @@ namespace Upo{
           dist_to_next_point_ = euclideanDistance(next_pose_robot_frame_);
         }
         //TODO clean
-        bool SimplePathTracker::checkPathTimeout()
-        {
-          bool ret = false;
-          if (!navigate_server_->isActive() || !traj_received_ || ros::Time::now() - last_trj_stamp_ > ros::Duration(2))
-          {
-            publishZeroSpeeds();
-            ret = true;
-          }
-
-          return ret;
-        }  // namespace Navigators
-        //TODO clean
         void SimplePathTracker::navigate()
         {
           if (rot_server_->isNewGoalAvailable())
@@ -312,29 +267,22 @@ namespace Upo{
             navigate_server_->setPreempted();
             //TODO sustituir los flags por la maquina de estados
             status_ = NavigationStatus::IDLE;
-
-            backwards_ = false;
-            recovery_rotation_ = false;
-            aproximated_ = false;
-            phase2_ = true;
-            phase1_ = true;
-            // Flags for internal states
-            traj_received_ = false;
+            
+            
             vx_ = vy_ = wz_ = 0;
           }
           if (navigate_server_->isNewGoalAvailable())
           {
-            ROS_INFO("Accepting new goal ");
+
             navigate_goal_ = navigate_server_->acceptNewGoal();
             global_goal_.pose = navigate_goal_->global_goal;
-            std::cout << "global_goal_: " << global_goal_.pose.position.x << " " << global_goal_.pose.position.y << " "
-                 << global_goal_.pose.orientation.z << " " << global_goal_.pose.orientation.w << std::endl;
-
+            last_trj_stamp_ = ros::Time::now();
             time_count_ = ros::Time::now();
 
             setGoalReachedFlag(0);
           }
-          if (!checkPathTimeout() && (navigate_server_->isActive() || !aproximated_) )
+          
+          if ( navigate_server_->isActive() )
           {
             computeGeometry();
 
@@ -345,9 +293,6 @@ namespace Upo{
         }
         void SimplePathTracker::publishCmdVel()
         {
-
-            if (navigation_paused_)
-              navigation_paused_ = false;
             
             fillFeedback(vx_, vy_, wz_, "ok");
 
@@ -377,7 +322,6 @@ namespace Upo{
           if (status_ && !navigate_result_.arrived)
           {
             navigate_result_.arrived = true;
-            traj_received_ = false;
 
             navigate_result_.finalAngle.data = angle_to_global_goal_;
             navigate_result_.finalDist.data = dist_to_global_goal_;
@@ -388,10 +332,6 @@ namespace Upo{
           else if (!status_ && navigate_result_.arrived)
           {
             navigate_result_.arrived = false;
-            backwards_ = false;
-            aproximated_ = false;
-            phase2_ = true;
-            phase1_ = true;
           }
         }
         void SimplePathTracker::fillFeedback(const double vx, const double vy, const double wz, const std::string &text)
@@ -484,12 +424,21 @@ namespace Upo{
         }
         void SimplePathTracker::localPathCallback(const trajectory_msgs::MultiDOFJointTrajectoryConstPtr &msg)
         {
-            
             if (navigate_server_->isActive())
             {
               next_point_ = msg->points[msg->points.size() > 1 ? 1 : 0];
-              traj_received_ = true;
-              last_trj_stamp_ = ros::Time::now();
+
+              //Check timeou
+              if(  ros::Time::now() - last_trj_stamp_ > ros::Duration(timeout_time_) ){ 
+                
+                status_before_timeout_ = status_;
+                status_ = NavigationStatus::PATH_TIMEOUT;
+
+              }else if (status_ == NavigationStatus::PATH_TIMEOUT ) {
+                last_trj_stamp_ = ros::Time::now();
+                status_ = status_before_timeout_;
+              }
+
             }
         }
         void SimplePathTracker::dynamicReconfigureCallback(upo_path_tracker::SimplePathTrackerConfig &config, uint32_t level)

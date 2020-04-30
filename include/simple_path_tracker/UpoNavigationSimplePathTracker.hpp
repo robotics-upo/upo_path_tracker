@@ -49,10 +49,11 @@ namespace Upo
           IDLE = 0,
           NAVIGATING_FORMWARD = 1,
           NAVIGATING_BACKWARDS = 2,
-          APROXIMATION_MAN = 3,
-          PATH_TIMEOUT = 4,
-          NAVIGATION_PAUSED = 5,
-          RECOVERY_ROTATION  = 6
+          APROXIMATION_MAN_1 = 3,
+          APROXIMATION_MAN_2 = 4,
+          PATH_TIMEOUT = 5,
+          NAVIGATION_PAUSED = 6,
+          RECOVERY_ROTATION  = 7
         };
       public: 
         /**
@@ -89,13 +90,6 @@ namespace Upo
          * 
          */
         void computeGeometry();
-        /**
-         * @brief 
-         * 
-         * @return true 
-         * @return false 
-         */
-        bool checkPathTimeout();
         /**
          * @brief 
          * 
@@ -187,17 +181,9 @@ namespace Upo
         }
 
         //Flags
-        bool backwards_ = false;
-        bool recovery_rotation_ = false;
-        bool traj_received_ = false;
-        bool phase1_ = true;
-        bool phase2_ = true;
-        bool timeout_ = false;
         bool do_navigate_ = true;
-        bool aproximated_ = false;
-        bool navigation_paused_  = false;
 
-        NavigationStatus status_;
+        NavigationStatus status_, status_before_timeout_;
 
         //Bool parameters
         bool debug_;
@@ -214,6 +200,8 @@ namespace Upo
         double orientdist_;
         double angle1_, angle2_, angle3_;
         double dist_aprox1_;
+        double timeout_time_;
+        
         //Int parameters
         int rot_thresh_;
         //String parameters(frames names)
