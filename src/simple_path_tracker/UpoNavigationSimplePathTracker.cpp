@@ -16,7 +16,6 @@ namespace Upo{
             *f_ = boost::bind(&SimplePathTracker::dynamicReconfigureCallback, this, _1, _2);
             server_->setCallback(*f_);
 
-
             nh_.param("angular_max_speed", ang_max_speed_, 0.4);
             nh_.param("linear_max_speed", lin_max_speed_, 0.2);
             nh_.param("linear_max_speed_back", lin_max_speed_back_, 0.2);
@@ -31,7 +30,6 @@ namespace Upo{
             nh_.param("dist_aprox1_", dist_aprox1_, 0.05);
             nh_.param("local_paths_timeout", timeout_time_, 1.0);
 
-            
             nh_.param("rot_thresh", rot_thresh_, 350);
 
             nh_.param("robot_base_frame", robot_base_frame_id_, (std::string) "base_link");
@@ -45,9 +43,6 @@ namespace Upo{
             double back_dur;
             nh_.param("backwards_duration", back_dur, 30.0);
             backwards_duration_ = ros::Duration(back_dur);
-
-
-            costmap_clean_srv = nh_.serviceClient<std_srvs::Trigger>("/custom_costmap_node/reset_costmap");
 
             // Publishers, only twist and markers_
             twist_pub_ = pnh_.advertise<geometry_msgs::Twist>("/cmd_vel", 1);
@@ -66,8 +61,7 @@ namespace Upo{
 
             // Service to check if it's possible a rotation in place consulting the costmap
             check_rot_srv_ = nh_.serviceClient<theta_star_2d::checkObstacles>("/custom_costmap_node/check_env");
-
-            status_ = NavigationStatus::IDLE;
+            costmap_clean_srv = nh_.serviceClient<std_srvs::Trigger>("/custom_costmap_node/reset_costmap");
             
             // Configure speed direction marker
             configureMarkers();
