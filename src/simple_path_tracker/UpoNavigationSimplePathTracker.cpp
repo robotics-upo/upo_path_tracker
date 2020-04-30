@@ -390,7 +390,7 @@ namespace Upo{
         }
         void SimplePathTracker::localPathCallback(const trajectory_msgs::MultiDOFJointTrajectoryConstPtr &msg)
         {
-            if (navigate_server_->isActive())
+            if (navigate_server_->isActive() && status_ != NavigationStatus::NAVIGATION_PAUSED)
             {
               next_point_ = msg->points[msg->points.size() > 1 ? 1 : 0];
 
