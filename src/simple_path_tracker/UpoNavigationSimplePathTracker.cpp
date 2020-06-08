@@ -15,6 +15,7 @@ namespace Upo{
             f_.reset(new dynamic_reconfigure::Server<upo_path_tracker::SimplePathTrackerConfig>::CallbackType);
             *f_ = boost::bind(&SimplePathTracker::dynamicReconfigureCallback, this, _1, _2);
             server_->setCallback(*f_);
+            ROS_INFO("Tracker: Loading params...");
 
             nh_.param("angular_max_speed", ang_max_speed_, 0.4);
             nh_.param("linear_max_speed", lin_max_speed_, 0.2);
@@ -43,16 +44,16 @@ namespace Upo{
             double back_dur;
             nh_.param("backwards_duration", back_dur, 30.0);
             backwards_duration_ = ros::Duration(back_dur);
-
+            ROS_INFO("Tracker: Configuring topics...");
             // Publishers, only twist and markers_
-            twist_pub_ = pnh_.advertise<geometry_msgs::Twist>("/cmd_vel", 1);
+            twist_pub_ = pnh_.advertise<geometry_msgs::Twist>("/nav_vel", 1);
             markers_pub_ = pnh_.advertise<visualization_msgs::Marker>("speed_markers", 2);
 
             local_path_sub_ = nh_.subscribe<trajectory_msgs::MultiDOFJointTrajectory>("/local_planner_node/local_path", 2,
                                                                                    &SimplePathTracker::localPathCallback, this);
            
             // Navigate action server configuration
-            navigate_server_.reset(new NavigateServer(pnh_, "/SimplePathTrackerActionServer", false));
+            navigate_server_.reset(new NavigateServer(pnh_, "/Navigation", false));
             navigate_server_->start();
 
             // Rotation action server configuration
@@ -68,13 +69,18 @@ namespace Upo{
         }     
         void SimplePathTracker::calculateCmdVel()
         {
-          
+          if(!new_path_)
+            return;
+
           computeGeometry();
+          
+          ROS_INFO("Calculating Cmd vel...");
           
           switch (status_)
           {
-            case NAVIGATING_FORMWARD:
+            case NAVIGATING_FORWARD:
             {
+              ROS_INFO("Navigating forward");
               if(dist_to_global_goal_ > aprox_distance_){
 
                 if (std::fabs(angle_to_next_point_) > deg2Rad(angle1_))  // Rot in place
@@ -109,12 +115,14 @@ namespace Upo{
             }
             case NAVIGATING_BACKWARDS:
             {
+                ROS_INFO("Navigating forward");
+
                   angle_back_ = angle_to_next_point_ < 0 ?  angle_to_next_point_ + M_PI: 
                                                     angle_to_next_point_ - M_PI;
 
                   if (ros::Time::now() - backwards_time_counter_ > backwards_duration_ && validateRotation()) 
                   {
-                    status_ = NavigationStatus::NAVIGATING_FORMWARD;
+                    status_ = NavigationStatus::NAVIGATING_FORWARD;
                   }
                   else if ( std::fabs(angle_back_) > std::fabs( deg2Rad(angle3_) ) )  // Too much angular distance, do only rotation in place
                   {
@@ -184,6 +192,8 @@ namespace Upo{
         bool SimplePathTracker::rotationInPlace(const geometry_msgs::Quaternion &final_orientation,const double &threshold,
                                                 bool final = false)
         {
+          ROS_INFO("Performing rotation in place (1)");
+
           tf2::Quaternion final_orientation_q, robot_orientation;
           final_orientation_q.setW(final_orientation.w);
           final_orientation_q.setZ(final_orientation.z);
@@ -197,6 +207,7 @@ namespace Upo{
         }
         bool SimplePathTracker::rotationInPlace(const double &diff_yaw,const double &threshold, bool final = false)
         {
+          ROS_INFO("Performing rotation in place (2)");
           bool ret = true;
 
           if (std::fabs(diff_yaw) > deg2Rad(threshold))
@@ -214,24 +225,30 @@ namespace Upo{
         }
         void SimplePathTracker::computeGeometry()
         {
+          ROS_INFO("Computing geometry");
           next_pose_robot_frame_ = transformPose(next_point_, world_frame_id_, robot_base_frame_id_, tf_buffer_);
           global_goal_robot_frame_ = transformPose(global_goal_, world_frame_id_, robot_base_frame_id_, tf_buffer_);
           angle_to_global_goal_ = getYawFromQuat(global_goal_.pose.orientation);
           dist_to_global_goal_ = euclideanDistance(global_goal_robot_frame_);
           angle_to_next_point_ = atan2(next_pose_robot_frame_.pose.position.y, next_pose_robot_frame_.pose.position.x);
           dist_to_next_point_ = euclideanDistance(next_pose_robot_frame_);
+          ROS_INFO("Finished computing geomtry");
         }
         void SimplePathTracker::processActionsStatus(const ros::TimerEvent &event)
         {
-
+          
           if( rot_server_->isNewGoalAvailable() ) 
           {
             rot_inplace_ = rot_server_->acceptNewGoal();
             status_ = NavigationStatus::RECOVERY_ROTATION;
+            ROS_INFO("Tracker: Status set to Recovery rotation");
+          
           }
           if( rot_server_->isPreemptRequested() ){
             rot_server_->setPreempted();
             status_ = NavigationStatus::IDLE;
+            ROS_INFO("Tracker: Status set to Idle");
+
           } 
 
           if (navigate_server_->isNewGoalAvailable())
@@ -239,10 +256,15 @@ namespace Upo{
             navigate_goal_ = navigate_server_->acceptNewGoal();
             global_goal_.pose = navigate_goal_->global_goal;
             last_trj_stamp_ = ros::Time::now();
+            status_ = NavigationStatus::NAVIGATING_FORWARD;
+
+            ROS_INFO("Tracker: New goal accepted ");
+            
           }
           
           if(navigate_server_->isPreemptRequested()){
             navigate_server_->setPreempted();
+            ROS_INFO("Navigation preempted by external request");
             setFinalNavigationStatus(false);
           }
 
@@ -279,6 +301,8 @@ namespace Upo{
         }
         void SimplePathTracker::setFinalNavigationStatus(bool arrived_succesfully)
         {
+          ROS_INFO("Tracker: Setting final navigation status: %d", (int)arrived_succesfully);
+
           if (arrived_succesfully)
           {
             navigate_result_.arrived = true;
@@ -292,7 +316,7 @@ namespace Upo{
           {
             navigate_result_.arrived = false;
           }
-
+          new_path_ = false;
           status_ = NavigationStatus::IDLE;
           publishZeroSpeeds();
 
@@ -315,6 +339,7 @@ namespace Upo{
         }
         void SimplePathTracker::publishZeroSpeeds()
         {
+            ROS_INFO("Publishing Zero Speeds");
             
             vx_ = vy_ = wz_ = 0; 
 
@@ -369,6 +394,7 @@ namespace Upo{
             markers_.at(1).pose.orientation.y = quat.getY();
             markers_.at(1).pose.orientation.z = quat.getZ();
             markers_.at(1).pose.orientation.w = quat.getW();
+            ROS_INFO("Tracker: Markers Configured");
         }   
         void SimplePathTracker::publishMarkers()
         {
@@ -387,25 +413,33 @@ namespace Upo{
         }
         void SimplePathTracker::localPathCallback(const trajectory_msgs::MultiDOFJointTrajectoryConstPtr &msg)
         {
+            ROS_INFO("Tracker: Local Path Callback");
+
             if (navigate_server_->isActive() && status_ != NavigationStatus::NAVIGATION_PAUSED)
             {
               next_point_ = msg->points[msg->points.size() > 1 ? 1 : 0];
-
+              new_path_ = true;
               //Check timeou
               if(  ros::Time::now() - last_trj_stamp_ > ros::Duration(timeout_time_) ){ 
-                
+
                 status_before_timeout_ = status_;
+                last_trj_stamp_ = ros::Time::now();
                 status_ = NavigationStatus::PATH_TIMEOUT;
+                ROS_INFO("Tracker: Path Timeout. ");
 
               }else if (status_ == NavigationStatus::PATH_TIMEOUT ) {
                 last_trj_stamp_ = ros::Time::now();
                 status_ = status_before_timeout_;
+                ROS_INFO("Tracker: Back from timeout");
+
               }
 
             }
         }
         void SimplePathTracker::dynamicReconfigureCallback(upo_path_tracker::SimplePathTrackerConfig &config, uint32_t level)
         {
+          ROS_INFO("Dynamic reconfigure callback");
+          
           angle1_ = config.angle1;
           angle2_ = config.angle2;
           angle3_ = config.angle3;

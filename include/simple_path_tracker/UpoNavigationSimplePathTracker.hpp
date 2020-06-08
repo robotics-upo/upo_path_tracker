@@ -48,7 +48,7 @@ namespace Upo
         enum NavigationStatus{
 
           IDLE = 0,
-          NAVIGATING_FORMWARD = 1,
+          NAVIGATING_FORWARD = 1,
           NAVIGATING_BACKWARDS = 2,
           APROXIMATION_MAN_1 = 3,
           APROXIMATION_MAN_2 = 4,
@@ -180,7 +180,7 @@ namespace Upo
 
         //Flags
         bool do_navigate_ = true;
-
+        bool new_path_ = false;
         NavigationStatus status_ =  NavigationStatus::IDLE;
         NavigationStatus status_before_timeout_;
 
