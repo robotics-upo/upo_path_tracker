@@ -15,15 +15,16 @@ namespace Upo{
             f_.reset(new dynamic_reconfigure::Server<upo_path_tracker::SimplePathTrackerConfig>::CallbackType);
             *f_ = boost::bind(&SimplePathTracker::dynamicReconfigureCallback, this, _1, _2);
             server_->setCallback(*f_);
+
             ROS_INFO("Tracker: Loading params...");
 
-            nh_.param("angular_max_speed", ang_max_speed_, 0.4);
-            nh_.param("linear_max_speed", lin_max_speed_, 0.2);
-            nh_.param("linear_max_speed_back", lin_max_speed_back_, 0.2);
+            nh_.param("angular_max_speed", ang_max_speed_, 0.5);
+            nh_.param("linear_max_speed", lin_max_speed_, 0.4);
+            nh_.param("linear_max_speed_back", lin_max_speed_back_, 0.4);
             nh_.param("angle_margin", angle_margin_, 10.0);
             nh_.param("start_aproximation_distance", aprox_distance_, 0.35);
-            nh_.param("a", a_, 0.5);
-            nh_.param("b", b_, 0.5);
+            nh_.param("a", a_, 0.3);
+            nh_.param("b", b_, 0.8);
             nh_.param("b_back", b_back_, 0.5);
             nh_.param("angle1", angle1_, 20.0);
             nh_.param("angle2", angle2_, 65.0);
@@ -34,9 +35,8 @@ namespace Upo{
             nh_.param("rot_thresh", rot_thresh_, 350);
 
             nh_.param("robot_base_frame", robot_base_frame_id_, (std::string) "base_link");
-            nh_.param("world_frame_id_", world_frame_id_, (std::string) "map");
+            nh_.param("world_frame_id", world_frame_id_, (std::string) "map");
             nh_.param("odom_frame", odom_frame_id_, (std::string) "odom");
-
             double rate;
             nh_.param("rate", rate, 40.0);
             navigate_timer_ = nh_.createTimer(ros::Duration(1/rate), &SimplePathTracker::processActionsStatus, this);
@@ -73,8 +73,6 @@ namespace Upo{
             return;
 
           computeGeometry();
-          
-          ROS_INFO("Calculating Cmd vel...");
           
           switch (status_)
           {
@@ -115,7 +113,7 @@ namespace Upo{
             }
             case NAVIGATING_BACKWARDS:
             {
-                ROS_INFO("Navigating forward");
+                ROS_INFO("Navigating backwards");
 
                   angle_back_ = angle_to_next_point_ < 0 ?  angle_to_next_point_ + M_PI: 
                                                     angle_to_next_point_ - M_PI;
@@ -140,6 +138,7 @@ namespace Upo{
             }
             case APROXIMATION_MAN_1:
             {
+              ROS_INFO("Approx Man 1");
               wz_ = 0;
 
               double dist = global_goal_robot_frame_.pose.position.x;
@@ -156,19 +155,26 @@ namespace Upo{
             }
             case APROXIMATION_MAN_2:
             {
+              ROS_INFO("Approx Man 2");
               double robotYaw, rpitch, rroll;
-              getCurrentOrientation(tf_buffer_).getEulerYPR(robotYaw, rpitch, rroll);
-             
+              getCurrentOrientation(tf_buffer_, robot_base_frame_id_, world_frame_id_).getEulerYPR(robotYaw, rpitch, rroll);
+              
+              std::cout<<"Robot yaw: "<<robotYaw<<std::endl;
+              
               double rotval =  deg2Rad(angle_to_global_goal_) - robotYaw;
 
               if(angle_to_global_goal_ > 0 && robotYaw < 0 ) 
                 rotval =  deg2Rad(angle_to_global_goal_) + robotYaw;
               
+              std::cout<<"rotval: "<<rotval<<std::endl;
+              std::cout<<"angle margin: "<<angle_margin_<<std::endl;
+
               removeMultipleRotations(rotval);
 
               if (validateRotation(rot_thresh_))
               {
-                if( !rotationInPlace(rotval, angle_margin_, true) ) 
+                ROS_INFO("Rotation Validated!");
+                if( !rotationInPlace(rad2Deg(rotval), angle_margin_, true) ) 
                 {
                   setFinalNavigationStatus(true);
                 }
@@ -176,6 +182,7 @@ namespace Upo{
               }
               else
               {
+                ROS_INFO("Not possible to make a rotation !");
                 setFinalNavigationStatus(true);
               }
               publishCmdVel();
@@ -209,8 +216,8 @@ namespace Upo{
         {
           ROS_INFO("Performing rotation in place (2)");
           bool ret = true;
-
-          if (std::fabs(diff_yaw) > deg2Rad(threshold))
+          ROS_INFO("Yaw diff: %.2f, threshold: %.f", diff_yaw, threshold);
+          if (std::fabs(diff_yaw) > threshold)
           {
             std::clamp(diff_yaw,-M_PI_2, M_PI_2);
             wz_ = getVel(final ? ang_max_speed_ + 0.05 : ang_max_speed_, final ? a_ / 2 : a_, rad2Deg(diff_yaw)); 
@@ -225,14 +232,12 @@ namespace Upo{
         }
         void SimplePathTracker::computeGeometry()
         {
-          ROS_INFO("Computing geometry");
           next_pose_robot_frame_ = transformPose(next_point_, world_frame_id_, robot_base_frame_id_, tf_buffer_);
           global_goal_robot_frame_ = transformPose(global_goal_, world_frame_id_, robot_base_frame_id_, tf_buffer_);
           angle_to_global_goal_ = getYawFromQuat(global_goal_.pose.orientation);
           dist_to_global_goal_ = euclideanDistance(global_goal_robot_frame_);
           angle_to_next_point_ = atan2(next_pose_robot_frame_.pose.position.y, next_pose_robot_frame_.pose.position.x);
           dist_to_next_point_ = euclideanDistance(next_pose_robot_frame_);
-          ROS_INFO("Finished computing geomtry");
         }
         void SimplePathTracker::processActionsStatus(const ros::TimerEvent &event)
         {
