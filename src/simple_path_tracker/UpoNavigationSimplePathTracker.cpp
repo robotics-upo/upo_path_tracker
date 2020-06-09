@@ -175,10 +175,9 @@ namespace Upo{
               {
                 ROS_INFO("Rotation Validated!");
                 if( !rotationInPlace(rad2Deg(rotval), angle_margin_, true) ) 
-                {
-                  setFinalNavigationStatus(true);
-                }
                 
+                  setFinalNavigationStatus(true);
+              
               }
               else
               {
@@ -268,7 +267,6 @@ namespace Upo{
           }
           
           if(navigate_server_->isPreemptRequested()){
-            navigate_server_->setPreempted();
             ROS_INFO("Navigation preempted by external request");
             setFinalNavigationStatus(false);
           }
