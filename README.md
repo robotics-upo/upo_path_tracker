@@ -42,7 +42,7 @@ The node works with action lib, it means it has his own navigation action server
  
 ![\omega_z = \pm \omega_{max} (1 - e^{-a \cdot \Delta \alpha}) ](https://render.githubusercontent.com/render/math?math=%5Comega_z%20%3D%20%5Cpm%20%5Comega_%7Bmax%7D%20(1%20-%20e%5E%7B-a%20%5Ccdot%20%5CDelta%20%5Calpha%7D)%20)
 
- With \\( \Delta \alpha \\) the angular difference to the goal orientation and the sign depending on the rotation direction. 
+ With the angular difference to the goal orientation and the sign depending on the rotation direction. 
 
  - *b*: Exponential speed factor for the linear speed. The same as above but for the linear speed.
  - *b_back*: The same as *b* but for the backwards displacement. 
