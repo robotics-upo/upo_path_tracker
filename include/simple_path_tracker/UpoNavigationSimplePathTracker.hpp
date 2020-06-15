@@ -195,6 +195,7 @@ namespace Upo
         double b_; 
         double b_back_;
         double timeout_time_;
+        double angle1_,angle2_,angle3_;
         ros::Duration backwards_duration_;
         //Int parameters
         int rot_thresh_;

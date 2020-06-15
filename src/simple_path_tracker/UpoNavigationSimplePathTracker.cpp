@@ -28,6 +28,9 @@ namespace Upo{
             nh_.param("b_back", b_back_, 0.5);
             nh_.param("dist_aprox1_", dist_aprox1_, 0.05);
             nh_.param("local_paths_timeout", timeout_time_, 1.0);
+            nh_.param("angle1", angle1_, 20.0);
+            nh_.param("angle2", angle2_, 65.0);
+            nh_.param("angle3", angle3_, 15.0);
 
             nh_.param("rot_thresh", rot_thresh_, 350);
 
