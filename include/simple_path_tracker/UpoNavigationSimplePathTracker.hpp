@@ -189,7 +189,6 @@ namespace Upo
         double lin_max_speed_;
         double lin_max_speed_back_;
         double angle_margin_;
-        double angle1_, angle2_, angle3_;
         double aprox_distance_;
         double dist_aprox1_;
         double a_; 
