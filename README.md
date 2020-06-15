@@ -1,105 +1,75 @@
-# Arco Path-Tracker
+<script type="text/javascript"
+src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS_CHTML"></script>
 
-These classes are the ones used in the ARCO robot. The repository is composed of two classes and one ros node.
+# UPO Path Tracker Package
 
-- nav_node: This is the main node, it instantiates two objects from the two classes mentioned above. 
-- sfm_nav_node: An alternative navigation mode implementing a social force model. 
+This packges comes from the old *arco_path_tracker* package used in the ARCO Robot. After that, the package has been reused for the NIx project, and a lot of changes were made, so after all, the package was a complete mess. To avoid that, we refactored it and the result is the current status. 
 
-## Installation
+The goal of the current package structure is to allow people to reuse it or to add new nodes for new robots into it. Each node is located in one separated folder in the src/ and include/ folders. So if you want to add a new node, first create a branch and a create the corresponding folder with the new classes. 
 
-You need the full ROS Kinetic installation. Follow the steps in http://wiki.ros.org/kinetic/Installation/Ubuntu and choose 
+You can also find the utils/ folder, in which we can put static methods shared by all the nodes, to reduce duplicated code. 
 
-```
-sudo apt-get install ros-kinetic-desktop-full
-```
+## Simple Path Tracker
 
-Once ROS is installed, inside your catkin workspace, src folder:
+This is the main node of the package. It's currently been used in the NIx project. It's a path tracker node for non-holonomic robots like Raposa. 
 
-```
-git clone https://github.com/robotics-upo/upo_path_tracker.git
-```
+The node subscribes to the local paths published by the the local planner node from the [lazy_theta_star_planners](https://github.com/robotics-upo/lazy_theta_star_planners) package. If you want to use another planner, you should send the send message with the same structure, of adapt a new version of the path tracker. 
 
-Return to the catkin workspace base path and do
+### Parameters and Configuration
 
-```
-catkin_make
-```
+It comes with standard default values in order to get a good behavior, but you know, sometimes you have to fine-tune these paramters. You will find below a list of the parameters, explaining the ones more complicated.
 
-## Displacement class
+The node works with action lib, it means it has his own navigation action server so to send goals you have to create a client or send messages to the topic ```/Navigation/goal```. The name of the action server can be remapped from the launch file. 
 
-This is main path-tracking class. It receives a MultiDOFTrajectory and send velocity commands to follow it in two ways:
+#### Subscribed topics
 
-### 1. Holonomic mode
+ - Local path suscriber: ```/local_planner_node/local_path```
 
-### 2. Non-holonomic mode
+#### Published topics
+ - Twist:  ```/nav_vel```
+ - Speed markers for rviz:  ```/speed_markers```
 
-## Security Margin class
+#### Services
 
-It suscribe to one or two lasers topics depending which mode you select and create a virtual distance of security. It has functions to compare the distances returned by the lasers with the security margin it creates.
+ - Check rotation client: Client from the service server in the custom costmap node to check if a rotation is possible depending of the surrounding obstacles
+ - Reset Costmap client: Client to clean the costmap when starting the approximation to the goal, in order to avoid errors or problem when costmap is dirty
 
-It creates two security perimeters. If some obstacle enters the inner security perimeter, the class continue returning "security stop state" until the obstacle has gone outside the outer perimeter. This is true for three possibles geometries: 
+#### Parameters
 
+ - *linear_max_speed*: 
+ - *linear_max_speed_back*: The backwards max speed
+ - *angular_max_speed*
+ - *angle_margin*: In the final approximation maneouvre, the angular difference with the goal orientation for the robot to consider that it has arrived to the goal. 
+ - *start_aproximation_distance*: The distance to start with the approximation phase.
+ - *a*: Exponential speed factor for the angular speed.
+ 
+ \\[ \omega_z = \pm \omega_{max} (1 - e^{-a \cdot \Delta \alpha}) \\]
+ 
+ With \\( \Delta \alpha \\) the angular difference to the goal orientation and the \\( \pm \\) sign depending on the rotation direction. 
 
-- Mode 0: It was designed to work with the old arco robot (the laundry machine) with the two lasers, the frontal and the rear one. 
-- Mode 1: Full 360 square perimeter
-- Mode 2: Full 360 elliptic security perimeter: Under construction
-
-- [ ] Make easy to change between the 3 modes. 
-
-
-
-### Parameters
-
-Depending on the mode you want to use, you need to pass it differents paramters. Some of them are dynamically reconfigurables. 
-
-#### Global parameters for all modes:
-
-- security_mode: 0,1 or 2 depending on the geometry you want to use
-- publish_markers: True to see nice markers in RViz
-- front_laser_link_frame_id: Need explanation?
-- stop_topic: The topic to which you want the class to publish a std_msgs::Bool with the current state
-
-#### Parameters for mode 0
-- only_front: To use or not front and rear security perimeters
-- f_front: Eccentricity of the frontal perimeter
-- f_back: Eccentricity of the rear perimeter
-- inner_radius_front: 
-- outer_radius_front:
-- inner_radius_back:
-- outer_radius_back:
-- back_laser_link_frame_id: only if only_front is false
-#### Parameters for mode 1
-- robot_frame_id: Usually base_link
-- delta_d: Distance from inner perimeter to outer perimeter. Outer perimeter is margin+delta_d
-- margin_x: Inner distance in x direction
-- margin_y: Inner distance in y direction
-
-#### Parameters for mode 2
-
-- f:
-- inner_radius:
-- outer_radius
+ - *b*: Exponential speed factor for the linear speed. The same as above but for the linear speed.
+ - *b_back*: The same as *b* but for the backwards displacement. 
+ - *dist_aprox1_*: The linear approximation distance to the goal
+ - *local_paths_timeout*: The timeout time of the paths
+ - *rot_thresh*: This is a number related to the quantity of the obstacles surrounding the robot and the robot radius. This is evaluated when doing the angular approximation to the goal.
+ - *robot_base_frame*: Robot frame id: base_link by default
+ - *world_frame_id*: World frame id: map by default
+ - *odom_frame*: Odometric frame id: odom by default
+ - *rate*: The running rate of the main process. 
+ - *backwards_duration*: When the robot finds that it can't rotate, he will try to achieve the goal by going backwards. The backwards duration is the time it will go backwards without checking if it can rotate to go again forwards.
 
 
-## SFMNav Class
+### TODOs
 
-Local path tracker using a Social Force Model to adapt to people present in the environment.
-
-It is a substitute to the Displacement class.
-
-### Dependencies
+ - [] Add odometric path tracking
+ - [] Fix some backwards bad behavior that results sometimes 
+ - [] Implement rotation in place action
 
 
-You should previously install the lightsfm library in your system:
+## SFM Path Tracker
 
-- Clone https://github.com/robotics-upo/lightsfm
-- run make install there (the library is a set of .hpp files that will be used by the SFMNav node)
+Very old, not used right now, we should adapt it to the action server communication protocol
 
+## ARCO Path Tracker
 
-### Topics
-
-Besides the topics published by Displacement, it adds a topic with markers for the social forces at:
-
-/sfm/markers/robot_forces
-
-
+Very old, not used right now, we should adapt it to the action server communication protocol
