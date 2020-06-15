@@ -1,6 +1,3 @@
-<script type="text/javascript"
-src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS_CHTML"></script>
-
 # UPO Path Tracker Package
 
 This packges comes from the old *arco_path_tracker* package used in the ARCO Robot. After that, the package has been reused for the NIx project, and a lot of changes were made, so after all, the package was a complete mess. To avoid that, we refactored it and the result is the current status. 
@@ -43,9 +40,9 @@ The node works with action lib, it means it has his own navigation action server
  - *start_aproximation_distance*: The distance to start with the approximation phase.
  - *a*: Exponential speed factor for the angular speed.
  
- \\[ \omega_z = \pm \omega_{max} (1 - e^{-a \cdot \Delta \alpha}) \\]
- 
- With \\( \Delta \alpha \\) the angular difference to the goal orientation and the \\( \pm \\) sign depending on the rotation direction. 
+![\omega_z = \pm \omega_{max} (1 - e^{-a \cdot \Delta \alpha}) ](https://render.githubusercontent.com/render/math?math=%5Comega_z%20%3D%20%5Cpm%20%5Comega_%7Bmax%7D%20(1%20-%20e%5E%7B-a%20%5Ccdot%20%5CDelta%20%5Calpha%7D)%20)
+
+ With \\( \Delta \alpha \\) the angular difference to the goal orientation and the sign depending on the rotation direction. 
 
  - *b*: Exponential speed factor for the linear speed. The same as above but for the linear speed.
  - *b_back*: The same as *b* but for the backwards displacement. 
@@ -64,7 +61,7 @@ The node works with action lib, it means it has his own navigation action server
  - [] Add odometric path tracking
  - [] Fix some backwards bad behavior that results sometimes 
  - [] Implement rotation in place action
-
+ - [] Integrate with the security check package
 
 ## SFM Path Tracker
 
@@ -73,3 +70,7 @@ Very old, not used right now, we should adapt it to the action server communicat
 ## ARCO Path Tracker
 
 Very old, not used right now, we should adapt it to the action server communication protocol
+
+## Dependencies
+
+For the social force model you need to install the social force navigation library:
