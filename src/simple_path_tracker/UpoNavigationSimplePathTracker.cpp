@@ -20,6 +20,7 @@ namespace Upo{
 
             nh_.param("angular_max_speed", ang_max_speed_, 0.5);
             nh_.param("linear_max_speed", lin_max_speed_, 0.4);
+
             nh_.param("linear_max_speed_back", lin_max_speed_back_, 0.4);
             nh_.param("angle_margin", angle_margin_, 10.0);
             nh_.param("start_aproximation_distance", aprox_distance_, 0.35);
@@ -33,6 +34,7 @@ namespace Upo{
             nh_.param("angle3", angle3_, 15.0);
 
             nh_.param("rot_thresh", rot_thresh_, 350);
+            nh_.param("force_rotation", force_rotation_, true);
 
             nh_.param("robot_base_frame", robot_base_frame_id_, (std::string) "base_link");
             nh_.param("world_frame_id", world_frame_id_, (std::string) "map");
@@ -171,7 +173,7 @@ namespace Upo{
 
               removeMultipleRotations(rotval);
 
-              if (validateRotation(rot_thresh_))
+              if (force_rotation_ || validateRotation(rot_thresh_))
               {
                 ROS_INFO("Rotation Validated!");
                 if( !rotationInPlace(rad2Deg(rotval), angle_margin_, true) ) 
@@ -219,7 +221,8 @@ namespace Upo{
           if (std::fabs(diff_yaw) > threshold)
           {
             std::clamp(diff_yaw,-M_PI_2, M_PI_2);
-            wz_ = getVel(final ? ang_max_speed_ + 0.05 : ang_max_speed_, final ? a_ / 2 : a_, rad2Deg(diff_yaw)); 
+            wz_ = getVel(final ? ang_max_speed_ + 0.05 : ang_max_speed_, final ? a_ / 2 : a_, diff_yaw); 
+            ROS_INFO("Wz: %.2f / %.2f", wz_, ang_max_speed_);
           }
           else
           {
@@ -269,6 +272,7 @@ namespace Upo{
           if(navigate_server_->isPreemptRequested()){
             ROS_INFO("Navigation preempted by external request");
             setFinalNavigationStatus(false);
+            // navigate_server_->setPreempted();
           }
 
 
@@ -416,7 +420,7 @@ namespace Upo{
         }
         void SimplePathTracker::localPathCallback(const trajectory_msgs::MultiDOFJointTrajectoryConstPtr &msg)
         {
-            ROS_INFO("Tracker: Local Path Callback");
+            // ROS_INFO("Tracker: Local Path Callback");
 
             if (navigate_server_->isActive() && status_ != NavigationStatus::NAVIGATION_PAUSED)
             {
