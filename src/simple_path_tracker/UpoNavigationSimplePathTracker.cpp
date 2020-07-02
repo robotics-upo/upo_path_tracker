@@ -18,13 +18,13 @@ namespace Upo{
 
             ROS_INFO("Tracker: Loading params...");
 
-            nh_.param("angular_max_speed", ang_max_speed_, 0.5);
+            nh_.param("angular_max_speed", ang_max_speed_, 0.8);
             nh_.param("linear_max_speed", lin_max_speed_, 0.4);
 
             nh_.param("linear_max_speed_back", lin_max_speed_back_, 0.4);
             nh_.param("angle_margin", angle_margin_, 10.0);
             nh_.param("start_aproximation_distance", aprox_distance_, 0.35);
-            nh_.param("a", a_, 0.3);
+            nh_.param("a", a_, 1.0);
             nh_.param("b", b_, 0.8);
             nh_.param("b_back", b_back_, 0.5);
             nh_.param("dist_aprox1_", dist_aprox1_, 0.05);
@@ -83,18 +83,19 @@ namespace Upo{
               ROS_INFO("Navigating forward");
               if(dist_to_global_goal_ > aprox_distance_){
 
-                if (std::fabs(angle_to_next_point_) > deg2Rad(angle1_))  // Rot in place
+                if (std::fabs(angle_to_next_point_) > angle1_)  // Rot in place
                 {
-                  
-                  if ( (fabs(angle_to_next_point_) < deg2Rad(angle2_) || validateRotation()) )
+                  ROS_INFO("Angle to next: %.2f , angle1: %.2f",std::fabs(angle_to_next_point_) , angle1_);
+                  if ( (fabs(angle_to_next_point_) < angle2_ || force_rotation_ || validateRotation()) )
                   {
-                    rotationInPlace(angle_to_next_point_, 0, true);
+                    rotationInPlace(angle_to_next_point_, 5, true);
                     vx_ = 0;
                   }
                   else
                   {
                     status_ = NavigationStatus::NAVIGATING_BACKWARDS;
                     backwards_time_counter_ = ros::Time::now();
+                    ROS_INFO("Switching to BACKWARDS: %.2f > %.2f", fabs(angle_to_next_point_), angle2_);
                   }
 
                 }else{
@@ -142,13 +143,14 @@ namespace Upo{
             {
               ROS_INFO("Approx Man 1");
               wz_ = 0;
-
+              vx_ = getVel(lin_max_speed_, b_, dist_to_global_goal_);
+              
               double dist = global_goal_robot_frame_.pose.position.x;
-
+              ROS_INFO("Dist: %f", dist);
               std::clamp(vx_, -1 * dist, dist);
-              vx_ /= 3;
+              vx_ /= 1.5;
 
-              if(std::fabs(dist) > dist_aprox1_)
+              if(std::fabs(dist) < dist_aprox1_)
                 status_ = NavigationStatus::APROXIMATION_MAN_2;
 
               publishCmdVel();
@@ -168,6 +170,12 @@ namespace Upo{
               if(angle_to_global_goal_ > 0 && robotYaw < 0 ) 
                 rotval =  deg2Rad(angle_to_global_goal_) + robotYaw;
               
+              if(angle_to_global_goal_ > 0 && robotYaw > 0)
+                rotval =  deg2Rad(angle_to_global_goal_) - robotYaw;
+
+              if(std::isnan(robotYaw) || std::isnan(rotval))
+                return;
+
               std::cout<<"rotval: "<<rotval<<std::endl;
               std::cout<<"angle margin: "<<angle_margin_<<std::endl;
 
@@ -217,11 +225,16 @@ namespace Upo{
         {
           ROS_INFO("Performing rotation in place (2)");
           bool ret = true;
-          ROS_INFO("Yaw diff: %.2f, threshold: %.f", diff_yaw, threshold);
+          // double diff_yaw_rad = deg2Rad(diff_yaw);
+
+          ROS_INFO("Yaw diff: %.2f , threshold: %.f", diff_yaw, threshold);
           if (std::fabs(diff_yaw) > threshold)
           {
-            std::clamp(diff_yaw,-M_PI_2, M_PI_2);
-            wz_ = getVel(final ? ang_max_speed_ + 0.05 : ang_max_speed_, final ? a_ / 2 : a_, diff_yaw); 
+            double diff_yaw_rad = deg2Rad(diff_yaw);
+            std::clamp(diff_yaw_rad,-M_PI, M_PI);
+            wz_ = getVel(final ? ang_max_speed_ + 0.05 : ang_max_speed_, final ? a_ / 2 : a_, diff_yaw_rad); 
+            // wz_ = getVel(final ? ang_max_speed_ + 0.05 : ang_max_speed_, a_, diff_yaw_rad); 
+            
             ROS_INFO("Wz: %.2f / %.2f", wz_, ang_max_speed_);
           }
           else
@@ -427,7 +440,7 @@ namespace Upo{
               next_point_ = msg->points[msg->points.size() > 1 ? 1 : 0];
               new_path_ = true;
               //Check timeou
-              if(  ros::Time::now() - last_trj_stamp_ > ros::Duration(timeout_time_) ){ 
+              if(  ros::Time::now() - last_trj_stamp_ > ros::Duration(timeout_time_)  && status_ != NavigationStatus::APROXIMATION_MAN_1 && status_ != NavigationStatus::APROXIMATION_MAN_2 ){ 
 
                 status_before_timeout_ = status_;
                 last_trj_stamp_ = ros::Time::now();
