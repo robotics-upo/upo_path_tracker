@@ -168,11 +168,8 @@ namespace Upo{
               double rotval =  deg2Rad(angle_to_global_goal_) - robotYaw;
 
               if(angle_to_global_goal_ > 0 && robotYaw < 0 ) 
-                rotval =  deg2Rad(angle_to_global_goal_) + robotYaw;
+                rotval =  -1*(deg2Rad(angle_to_global_goal_) + robotYaw);
               
-              if(angle_to_global_goal_ > 0 && robotYaw > 0)
-                rotval =  deg2Rad(angle_to_global_goal_) - robotYaw;
-
               if(std::isnan(robotYaw) || std::isnan(rotval))
                 return;
 
@@ -184,7 +181,7 @@ namespace Upo{
               if (force_rotation_ || validateRotation(rot_thresh_))
               {
                 ROS_INFO("Rotation Validated!");
-                if( !rotationInPlace(rad2Deg(rotval), angle_margin_, true) ) 
+                if( !rotationInPlace(rotval, deg2Rad(angle_margin_), true) ) 
                 
                   setFinalNavigationStatus(true);
               
@@ -230,9 +227,9 @@ namespace Upo{
           ROS_INFO("Yaw diff: %.2f , threshold: %.f", diff_yaw, threshold);
           if (std::fabs(diff_yaw) > threshold)
           {
-            double diff_yaw_rad = deg2Rad(diff_yaw);
-            std::clamp(diff_yaw_rad,-M_PI, M_PI);
-            wz_ = getVel(final ? ang_max_speed_ + 0.05 : ang_max_speed_, final ? a_ / 2 : a_, diff_yaw_rad); 
+            // double diff_yaw_rad = deg2Rad(diff_yaw);
+            std::clamp(diff_yaw,-M_PI, M_PI);
+            wz_ = getVel(final ? ang_max_speed_ + 0.05 : ang_max_speed_, final ? a_ / 2 : a_, diff_yaw); 
             // wz_ = getVel(final ? ang_max_speed_ + 0.05 : ang_max_speed_, a_, diff_yaw_rad); 
             
             ROS_INFO("Wz: %.2f / %.2f", wz_, ang_max_speed_);
