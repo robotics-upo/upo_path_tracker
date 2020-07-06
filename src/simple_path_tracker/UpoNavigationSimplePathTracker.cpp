@@ -82,13 +82,13 @@ namespace Upo{
             {
               ROS_INFO("Navigating forward");
               if(dist_to_global_goal_ > aprox_distance_){
-
-                if (std::fabs(angle_to_next_point_) > angle1_)  // Rot in place
-                {
                   ROS_INFO("Angle to next: %.2f , angle1: %.2f",std::fabs(angle_to_next_point_) , angle1_);
-                  if ( (fabs(angle_to_next_point_) < angle2_ || force_rotation_ || validateRotation()) )
+
+                if (std::fabs(angle_to_next_point_) > deg2Rad(angle1_))  // Rot in place
+                {
+                  if ( (fabs(angle_to_next_point_) < deg2Rad(angle2_) || force_rotation_ || validateRotation()) )
                   {
-                    rotationInPlace(angle_to_next_point_, 5, true);
+                    rotationInPlace(angle_to_next_point_, deg2Rad(5), true);
                     vx_ = 0;
                   }
                   else
@@ -164,12 +164,13 @@ namespace Upo{
               getCurrentOrientation(tf_buffer_, robot_base_frame_id_, world_frame_id_).getEulerYPR(robotYaw, rpitch, rroll);
               
               std::cout<<"Robot yaw: "<<robotYaw<<std::endl;
+              std::cout<<"Angle 2gg: "<<angle_to_global_goal_<<std::endl;
               
               double rotval =  deg2Rad(angle_to_global_goal_) - robotYaw;
 
-              if(angle_to_global_goal_ > 0 && robotYaw < 0 ) 
-                rotval =  -1*(deg2Rad(angle_to_global_goal_) + robotYaw);
-              
+              if(angle_to_global_goal_ > deg2Rad(M_PI_2) && robotYaw < 0 ) 
+                rotval =  -1* (2* M_PI - deg2Rad(angle_to_global_goal_) + robotYaw);
+
               if(std::isnan(robotYaw) || std::isnan(rotval))
                 return;
 
