@@ -15,7 +15,7 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2_ros/transform_listener.h>
 
-#include <theta_star_2d/checkObstacles.h>
+#include <nix_common/CheckObstacles.h>
 
 #include <actionlib/server/simple_action_server.h>
 #include <upo_actions/NavigateAction.h>

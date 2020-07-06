@@ -63,7 +63,7 @@ namespace Upo{
             rot_server_->start();
 
             // Service to check if it's possible a rotation in place consulting the costmap
-            check_rot_srv_ = nh_.serviceClient<theta_star_2d::checkObstacles>("/custom_costmap_node/check_env");
+            check_rot_srv_ = nh_.serviceClient<nix_common::CheckObstacles>("/custom_costmap_node/check_env");
             costmap_clean_srv = nh_.serviceClient<std_srvs::Trigger>("/custom_costmap_node/reset_costmap");
 
             // Configure speed direction marker
@@ -310,7 +310,7 @@ namespace Upo{
         {
           bool ret = false;
 
-          theta_star_2d::checkObstacles trg;
+          nix_common::CheckObstacles trg;
           trg.request.thresh.data = thresh;
           check_rot_srv_.call(trg);
           
