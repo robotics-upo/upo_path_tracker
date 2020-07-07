@@ -34,7 +34,8 @@ namespace Upo{
             nh_.param("angle3", angle3_, 15.0);
 
             nh_.param("rot_thresh", rot_thresh_, 350);
-            nh_.param("force_rotation", force_rotation_, true);
+            nh_.param("force_rotation", force_rotation_, false);
+            nh_.param("force_final_rotation", force_final_rotation_, true);
 
             nh_.param("robot_base_frame", robot_base_frame_id_, (std::string) "base_link");
             nh_.param("world_frame_id", world_frame_id_, (std::string) "map");
@@ -82,11 +83,11 @@ namespace Upo{
             {
               ROS_INFO("Navigating forward");
               if(dist_to_global_goal_ > aprox_distance_){
-                  ROS_INFO("Angle to next: %.2f , angle1: %.2f",std::fabs(angle_to_next_point_) , angle1_);
+                  ROS_INFO("Angle to next: %.2f , angle1: %.2f, angle2: %.2f",rad2Deg(std::fabs(angle_to_next_point_)) , angle1_,angle2_);
 
                 if (std::fabs(angle_to_next_point_) > deg2Rad(angle1_))  // Rot in place
                 {
-                  if ( (fabs(angle_to_next_point_) < deg2Rad(angle2_) || force_rotation_ || validateRotation()) )
+                  if ( (fabs(angle_to_next_point_) < deg2Rad(angle2_) || force_rotation_ || validateRotation(rot_thresh_)) )
                   {
                     rotationInPlace(angle_to_next_point_, deg2Rad(5), true);
                     vx_ = 0;
@@ -106,6 +107,7 @@ namespace Upo{
                 }
 
               }else{
+                previous_status_ = status_;
                 status_ = NavigationStatus::APROXIMATION_MAN_1;
                 std_srvs::Trigger trg;
                 costmap_clean_srv.call(trg);
@@ -118,10 +120,11 @@ namespace Upo{
             {
                 ROS_INFO("Navigating backwards");
 
-                  angle_back_ = angle_to_next_point_ < 0 ?  angle_to_next_point_ + M_PI: 
-                                                    angle_to_next_point_ - M_PI;
-
-                  if (ros::Time::now() - backwards_time_counter_ > backwards_duration_ && validateRotation()) 
+                angle_back_ = angle_to_next_point_ < 0 ?  angle_to_next_point_ + M_PI: 
+                                                            angle_to_next_point_ - M_PI;
+                if(dist_to_global_goal_ > aprox_distance_){
+                  
+                  if (ros::Time::now() - backwards_time_counter_ > backwards_duration_ && validateRotation(rot_thresh_)) 
                   {
                     status_ = NavigationStatus::NAVIGATING_FORWARD;
                   }
@@ -135,20 +138,29 @@ namespace Upo{
                     vx_ = -getVel(lin_max_speed_back_, b_back_, dist_to_global_goal_);
                     rotationInPlace(angle_back_, 0, false);
                   }
+                }else{
+                  previous_status_ = status_;
+                  status_ = NavigationStatus::APROXIMATION_MAN_1;
+                  std_srvs::Trigger trg;
+                  costmap_clean_srv.call(trg);
+                }
               publishCmdVel();
 
               break;
             }
             case APROXIMATION_MAN_1:
             {
-              ROS_INFO("Approx Man 1");
+              // ROS_INFO("Approx Man 1");
               wz_ = 0;
               vx_ = getVel(lin_max_speed_, b_, dist_to_global_goal_);
               
               double dist = global_goal_robot_frame_.pose.position.x;
-              ROS_INFO("Dist: %f", dist);
+              // ROS_INFO("Dist: %f", dist);
               std::clamp(vx_, -1 * dist, dist);
               vx_ /= 1.5;
+
+              if(previous_status_ == NavigationStatus::NAVIGATING_BACKWARDS)
+                vx_ *= -1;
 
               if(std::fabs(dist) < dist_aprox1_)
                 status_ = NavigationStatus::APROXIMATION_MAN_2;
@@ -159,12 +171,12 @@ namespace Upo{
             }
             case APROXIMATION_MAN_2:
             {
-              ROS_INFO("Approx Man 2");
+              // ROS_INFO("Approx Man 2");
               double robotYaw, rpitch, rroll;
               getCurrentOrientation(tf_buffer_, robot_base_frame_id_, world_frame_id_).getEulerYPR(robotYaw, rpitch, rroll);
               
-              std::cout<<"Robot yaw: "<<robotYaw<<std::endl;
-              std::cout<<"Angle 2gg: "<<angle_to_global_goal_<<std::endl;
+              // std::cout<<"Robot yaw: "<<robotYaw<<std::endl;
+              // std::cout<<"Angle 2gg: "<<angle_to_global_goal_<<std::endl;
               
               double rotval =  deg2Rad(angle_to_global_goal_) - robotYaw;
 
@@ -174,12 +186,12 @@ namespace Upo{
               if(std::isnan(robotYaw) || std::isnan(rotval))
                 return;
 
-              std::cout<<"rotval: "<<rotval<<std::endl;
-              std::cout<<"angle margin: "<<angle_margin_<<std::endl;
+              // std::cout<<"rotval: "<<rotval<<std::endl;
+              // std::cout<<"angle margin: "<<angle_margin_<<std::endl;
 
               removeMultipleRotations(rotval);
 
-              if (force_rotation_ || validateRotation(rot_thresh_))
+              if (force_final_rotation_ || validateRotation(rot_thresh_))
               {
                 ROS_INFO("Rotation Validated!");
                 if( !rotationInPlace(rotval, deg2Rad(angle_margin_), true) ) 

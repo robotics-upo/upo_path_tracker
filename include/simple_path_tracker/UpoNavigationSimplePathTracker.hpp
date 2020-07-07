@@ -181,9 +181,10 @@ namespace Upo
         //Flags
         bool do_navigate_ = true;
         bool new_path_ = false;
-        bool force_rotation_ = true;
+        bool force_rotation_ = false;
+        bool force_final_rotation_ = true;
         NavigationStatus status_ =  NavigationStatus::IDLE;
-        NavigationStatus status_before_timeout_;
+        NavigationStatus status_before_timeout_, previous_status_;
 
         //Double parameters
         double ang_max_speed_;
