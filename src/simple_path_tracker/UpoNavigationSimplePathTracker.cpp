@@ -19,17 +19,17 @@ namespace Upo{
             ROS_INFO("Tracker: Loading params...");
 
             nh_.param("angular_max_speed", ang_max_speed_, 0.8);
-            nh_.param("linear_max_speed", lin_max_speed_, 0.4);
+            nh_.param("linear_max_speed", lin_max_speed_, 0.25);
 
-            nh_.param("linear_max_speed_back", lin_max_speed_back_, 0.4);
+            nh_.param("linear_max_speed_back", lin_max_speed_back_, 0.25);
             nh_.param("angle_margin", angle_margin_, 10.0);
-            nh_.param("start_aproximation_distance", aprox_distance_, 0.35);
-            nh_.param("a", a_, 1.0);
-            nh_.param("b", b_, 0.8);
+            nh_.param("start_aproximation_distance", aprox_distance_, 0.3);
+            nh_.param("a", a_, 1.4);
+            nh_.param("b", b_, 0.5);
             nh_.param("b_back", b_back_, 0.5);
             nh_.param("dist_aprox1_", dist_aprox1_, 0.05);
-            nh_.param("local_paths_timeout", timeout_time_, 1.0);
-            nh_.param("angle1", angle1_, 20.0);
+            nh_.param("local_paths_timeout", timeout_time_, 2.0);
+            nh_.param("angle1", angle1_, 35.0);
             nh_.param("angle2", angle2_, 65.0);
             nh_.param("angle3", angle3_, 15.0);
 
@@ -162,9 +162,10 @@ namespace Upo{
               if(previous_status_ == NavigationStatus::NAVIGATING_BACKWARDS)
                 vx_ *= -1;
 
-              if(std::fabs(dist) < dist_aprox1_)
+              if(std::fabs(dist) < dist_aprox1_){
+	        vx_ = 0;	
                 status_ = NavigationStatus::APROXIMATION_MAN_2;
-
+	      }
               publishCmdVel();
 
               break;
@@ -462,6 +463,8 @@ namespace Upo{
                 status_ = status_before_timeout_;
                 ROS_INFO("Tracker: Back from timeout");
 
+              }else{
+                last_trj_stamp_ = ros::Time::now();
               }
 
             }
