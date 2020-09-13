@@ -23,14 +23,14 @@ namespace Upo{
 
             nh_.param("linear_max_speed_back", lin_max_speed_back_, 0.25);
             nh_.param("angle_margin", angle_margin_, 10.0);
-            nh_.param("start_aproximation_distance", aprox_distance_, 0.3);
+            nh_.param("start_aproximation_distance", aprox_distance_, 0.2);
             nh_.param("a", a_, 1.4);
             nh_.param("b", b_, 0.5);
             nh_.param("b_back", b_back_, 0.5);
             nh_.param("dist_aprox1_", dist_aprox1_, 0.05);
             nh_.param("local_paths_timeout", timeout_time_, 2.0);
             nh_.param("angle1", angle1_, 35.0);
-            nh_.param("angle2", angle2_, 65.0);
+            nh_.param("angle2", angle2_, 90.0);
             nh_.param("angle3", angle3_, 15.0);
 
             nh_.param("rot_thresh", rot_thresh_, 350);
@@ -81,9 +81,9 @@ namespace Upo{
           {
             case NAVIGATING_FORWARD:
             {
-              ROS_INFO("Navigating forward");
+              ROS_INFO_ONCE("Navigating forward");
               if(dist_to_global_goal_ > aprox_distance_){
-                  ROS_INFO("Angle to next: %.2f , angle1: %.2f, angle2: %.2f",rad2Deg(std::fabs(angle_to_next_point_)) , angle1_,angle2_);
+                  ROS_INFO_ONCE("Angle to next: %.2f , angle1: %.2f, angle2: %.2f",rad2Deg(std::fabs(angle_to_next_point_)) , angle1_,angle2_);
 
                 if (std::fabs(angle_to_next_point_) > deg2Rad(angle1_))  // Rot in place
                 {
@@ -96,10 +96,10 @@ namespace Upo{
                   {
                     status_ = NavigationStatus::NAVIGATING_BACKWARDS;
                     backwards_time_counter_ = ros::Time::now();
-                    ROS_INFO("Switching to BACKWARDS: %.2f > %.2f", fabs(angle_to_next_point_), angle2_);
+                    ROS_INFO_ONCE("Switching to BACKWARDS: %.2f > %.2f", fabs(angle_to_next_point_), angle2_);
                   }
 
-                }else{
+                }else{//Go forward while making orientation corrections
 
                   vx_ = getVel(lin_max_speed_, b_, dist_to_global_goal_);
                   vy_ = 0;
@@ -118,7 +118,7 @@ namespace Upo{
             }
             case NAVIGATING_BACKWARDS:
             {
-                ROS_INFO("Navigating backwards");
+                ROS_INFO_ONCE("Navigating backwards");
 
                 angle_back_ = angle_to_next_point_ < 0 ?  angle_to_next_point_ + M_PI: 
                                                             angle_to_next_point_ - M_PI;
@@ -157,15 +157,15 @@ namespace Upo{
               double dist = global_goal_robot_frame_.pose.position.x;
               // ROS_INFO("Dist: %f", dist);
               std::clamp(vx_, -1 * dist, dist);
-              vx_ /= 1.5;
+              // vx_ /= 1.5;
 
               if(previous_status_ == NavigationStatus::NAVIGATING_BACKWARDS)
                 vx_ *= -1;
 
               if(std::fabs(dist) < dist_aprox1_){
-	        vx_ = 0;	
+	              vx_ = 0;	
                 status_ = NavigationStatus::APROXIMATION_MAN_2;
-	      }
+      	      }
               publishCmdVel();
 
               break;
@@ -191,10 +191,12 @@ namespace Upo{
               // std::cout<<"angle margin: "<<angle_margin_<<std::endl;
 
               removeMultipleRotations(rotval);
+              if(rotval > M_PI) // Si rot = 200 grados-> debe girar -160
+                rotval = rotval - 2* M_PI;
 
               if (force_final_rotation_ || validateRotation(rot_thresh_))
               {
-                ROS_INFO("Rotation Validated!");
+                ROS_INFO_ONCE("Rotation Validated!");
                 if( !rotationInPlace(rotval, deg2Rad(angle_margin_), true) ) 
                 
                   setFinalNavigationStatus(true);
@@ -202,7 +204,7 @@ namespace Upo{
               }
               else
               {
-                ROS_INFO("Not possible to make a rotation !");
+                ROS_INFO_ONCE("Not possible to make a rotation !");
                 setFinalNavigationStatus(true);
               }
               publishCmdVel();
@@ -219,7 +221,7 @@ namespace Upo{
         bool SimplePathTracker::rotationInPlace(const geometry_msgs::Quaternion &final_orientation,const double &threshold,
                                                 bool final = false)
         {
-          ROS_INFO("Performing rotation in place (1)");
+          ROS_INFO_ONCE("Performing rotation in place (1)");
 
           tf2::Quaternion final_orientation_q, robot_orientation;
           final_orientation_q.setW(final_orientation.w);
@@ -234,11 +236,11 @@ namespace Upo{
         }
         bool SimplePathTracker::rotationInPlace(const double &diff_yaw,const double &threshold, bool final = false)
         {
-          ROS_INFO("Performing rotation in place (2)");
+          ROS_INFO_ONCE("Performing rotation in place (2)");
           bool ret = true;
           // double diff_yaw_rad = deg2Rad(diff_yaw);
 
-          ROS_INFO("Yaw diff: %.2f , threshold: %.f", diff_yaw, threshold);
+          ROS_INFO_ONCE("Yaw diff: %.2f , threshold: %.f", diff_yaw, threshold);
           if (std::fabs(diff_yaw) > threshold)
           {
             // double diff_yaw_rad = deg2Rad(diff_yaw);
@@ -246,7 +248,7 @@ namespace Upo{
             wz_ = getVel(final ? ang_max_speed_ + 0.05 : ang_max_speed_, final ? a_ / 2 : a_, diff_yaw); 
             // wz_ = getVel(final ? ang_max_speed_ + 0.05 : ang_max_speed_, a_, diff_yaw_rad); 
             
-            ROS_INFO("Wz: %.2f / %.2f", wz_, ang_max_speed_);
+            ROS_INFO_ONCE("Wz: %.2f / %.2f", wz_, ang_max_speed_);
           }
           else
           {

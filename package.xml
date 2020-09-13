@@ -55,7 +55,7 @@
   <build_depend>actionlib_msgs</build_depend>
   <build_depend>message_generation</build_depend>
   <build_depend>upo_actions</build_depend>
-  <build_depend>theta_star_2d</build_depend>
+  <build_depend>nix_common</build_depend>
   <build_depend>people_msgs</build_depend>
  
   <build_export_depend>actionlib</build_export_depend>
@@ -63,7 +63,7 @@
   <build_export_depend>roscpp</build_export_depend>
   <build_export_depend>std_msgs</build_export_depend>
   <build_export_depend>upo_actions</build_export_depend>
-  <build_export_depend>theta_star_2d</build_export_depend>
+  <build_export_depend>nix_common</build_export_depend>
   <build_export_depend>people_msgs</build_export_depend>
 
   <exec_depend>actionlib</exec_depend>
@@ -72,7 +72,7 @@
   <exec_depend>upo_actions</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>message_runtime</exec_depend>  
-  <exec_depend>theta_star_2d</exec_depend>
+  <exec_depend>nix_common</exec_depend>
   <exec_depend>people_msgs</exec_depend>
 
   <!-- The export tag contains other, unspecified, tags -->

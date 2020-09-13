@@ -10,7 +10,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf2_geometry_msgs
   upo_actions
   dynamic_reconfigure
-  theta_star_2d
+  nix_common
 )
 
 find_package(Doxygen)
@@ -42,7 +42,7 @@ catkin_package(
   LIBRARIES displacement
   LIBRARIES SimplePathTracker
   LIBRARIES securityMargin
-  CATKIN_DEPENDS roscpp upo_actions theta_star_2d
+  CATKIN_DEPENDS roscpp upo_actions nix_common
 )
 
 include_directories(
