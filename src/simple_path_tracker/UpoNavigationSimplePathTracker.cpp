@@ -198,6 +198,8 @@ namespace Upo{
               if(rotval > M_PI) // Si rot = 200 grados-> debe girar -160
                 rotval = rotval - 2* M_PI;
 		ROS_INFO("Performing final rotation: %f", rotval);
+              if(rotval < -M_PI)
+                rotval = rotval + 2* M_PI;
               if (force_final_rotation_ || validateRotation(rot_thresh_))
               {
                 ROS_INFO_ONCE("Rotation Validated!");
