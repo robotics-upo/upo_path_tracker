@@ -63,14 +63,14 @@ add_dependencies(simple_path_tracker_node ${PROJECT_NAME}_gencfg
 
 # Alternative Path tracker node used in the arco project based in the social force model
 
-add_executable(sfm_path_tracker src/sfm_path_tracker.cpp 
-                                src/sfm_path_tracker/SFMController.cpp 
-                                src/arco_path_tracker/SecurityMargin.cpp)
+#add_executable(sfm_path_tracker src/sfm_path_tracker.cpp 
+#                                src/sfm_path_tracker/SFMController.cpp 
+#                                src/arco_path_tracker/SecurityMargin.cpp)
 
-target_link_libraries(sfm_path_tracker ${catkin_LIBRARIES})
-add_dependencies(sfm_path_tracker ${PROJECT_NAME}_gencfg 
-                                  ${catkin_EXPORTED_TARGETS}  
-                                  ${${PROJECT_NAME}_EXPORTED_TARGETS})
+#target_link_libraries(sfm_path_tracker ${catkin_LIBRARIES})
+#add_dependencies(sfm_path_tracker ${PROJECT_NAME}_gencfg 
+#                                  ${catkin_EXPORTED_TARGETS}  
+#                                  ${${PROJECT_NAME}_EXPORTED_TARGETS})
 
 # Path tracker node used in the arco project
 add_executable(arco_path_tracker_node src/arco_path_tracker_node.cpp

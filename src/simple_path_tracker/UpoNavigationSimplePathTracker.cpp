@@ -24,13 +24,13 @@ namespace Upo{
             nh_.param("linear_max_speed_back", lin_max_speed_back_, 0.25);
             nh_.param("angle_margin", angle_margin_, 10.0);
             nh_.param("start_aproximation_distance", aprox_distance_, 0.2);
-            nh_.param("a", a_, 1.4);
-            nh_.param("b", b_, 0.5);
-            nh_.param("b_back", b_back_, 0.5);
+            nh_.param("a", a_, 1.5);
+            nh_.param("b", b_, 0.4);
+            nh_.param("b_back", b_back_, 0.4);
             nh_.param("dist_aprox1_", dist_aprox1_, 0.05);
             nh_.param("local_paths_timeout", timeout_time_, 2.0);
             nh_.param("angle1", angle1_, 35.0);
-            nh_.param("angle2", angle2_, 90.0);
+            nh_.param("angle2", angle2_, 120.0);
             nh_.param("angle3", angle3_, 15.0);
 
             nh_.param("rot_thresh", rot_thresh_, 350);
@@ -43,7 +43,11 @@ namespace Upo{
             double rate;
             nh_.param("rate", rate, 40.0);
             navigate_timer_ = nh_.createTimer(ros::Duration(1/rate), &SimplePathTracker::processActionsStatus, this);
-
+		ROS_INFO(" Tracker params:");
+		ROS_INFO(" a: %f", a_);
+		ROS_INFO(" b: %f", b_);
+		ROS_INFO(" Angle1: %f", angle1_);
+		ROS_INFO(" Angle2: %f", angle2_);
             double back_dur;
             nh_.param("backwards_duration", back_dur, 30.0);
             backwards_duration_ = ros::Duration(back_dur);
@@ -193,7 +197,7 @@ namespace Upo{
               removeMultipleRotations(rotval);
               if(rotval > M_PI) // Si rot = 200 grados-> debe girar -160
                 rotval = rotval - 2* M_PI;
-
+		ROS_INFO("Performing final rotation: %f", rotval);
               if (force_final_rotation_ || validateRotation(rot_thresh_))
               {
                 ROS_INFO_ONCE("Rotation Validated!");
