@@ -18,10 +18,10 @@ namespace Upo{
 
             ROS_INFO("Tracker: Loading params...");
 
-            nh_.param("angular_max_speed", ang_max_speed_, 0.8);
-            nh_.param("linear_max_speed", lin_max_speed_, 0.25);
+            nh_.param("angular_max_speed", ang_max_speed_, 0.3);
+            nh_.param("linear_max_speed", lin_max_speed_, 0.15);
 
-            nh_.param("linear_max_speed_back", lin_max_speed_back_, 0.25);
+            nh_.param("linear_max_speed_back", lin_max_speed_back_, 0.15);
             nh_.param("angle_margin", angle_margin_, 10.0);
             nh_.param("start_aproximation_distance", aprox_distance_, 0.2);
             nh_.param("a", a_, 1.5);
@@ -70,17 +70,35 @@ namespace Upo{
             // Service to check if it's possible a rotation in place consulting the costmap
             check_rot_srv_ = nh_.serviceClient<nix_common::CheckObstacles>("/custom_costmap_node/check_env");
             costmap_clean_srv = nh_.serviceClient<std_srvs::Trigger>("/custom_costmap_node/reset_costmap");
-
+            no_rotation_path = nh_.advertiseService("disable_rotations", &SimplePathTracker::disableRotations, this);
             // Configure speed direction marker
             configureMarkers();
-        }     
+        }  
+        bool SimplePathTracker::disableRotations(std_srvs::EmptyRequest &req, std_srvs::EmptyResponse &rep){
+        
+        disable_rotations = !disable_rotations;
+        if(disable_rotations)
+          ROS_INFO("Rotation disabled");
+        else
+          ROS_INFO("Rotation enabled");
+
+        return true;
+        }   
         void SimplePathTracker::calculateCmdVel()
         {
           if(!new_path_)
             return;
 
           computeGeometry();
-          
+          if(disable_rotations)
+          {
+              vx_ = getVel(lin_max_speed_, b_, global_goal_robot_frame_.pose.position.x);
+              publishCmdVel();
+              if(global_goal_robot_frame_.pose.position.x < 0.3 ){
+                  setFinalNavigationStatus(true);
+              }
+              return;
+          }
           switch (status_)
           {
             case NAVIGATING_FORWARD:
@@ -316,8 +334,11 @@ namespace Upo{
         {
             
             fillFeedback(vx_, vy_, wz_, "ok");
+            if(!disable_rotations)
+              speed_command_.angular.z = wz_;
+            else
+              speed_command_.angular.z = 0;
 
-            speed_command_.angular.z = wz_;
             speed_command_.linear.x = vx_;
             speed_command_.linear.y = vy_;
 

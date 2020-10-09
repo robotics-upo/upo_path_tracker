@@ -23,6 +23,7 @@
 #include <upo_actions/ExecuteMissionActionFeedback.h>
 
 #include <std_srvs/Trigger.h>
+#include <std_srvs/Empty.h>
 #include <tf/transform_datatypes.h>
 
 #include <dynamic_reconfigure/server.h>
@@ -71,6 +72,7 @@ namespace Upo
         virtual ~SimplePathTracker() = default;
 
       private:
+        bool disableRotations(std_srvs::EmptyRequest &req, std_srvs::EmptyResponse &rep);
       
         /**
          * @brief 
@@ -239,7 +241,7 @@ namespace Upo
 
         ros::ServiceClient check_rot_srv_;
         ros::ServiceClient costmap_clean_srv;
-
+        ros::ServiceServer no_rotation_path;
         ros::Timer navigate_timer_;
         // Markers for RViz
         std::vector<visualization_msgs::Marker> markers_;
@@ -262,6 +264,7 @@ namespace Upo
         std::unique_ptr<dynamic_reconfigure::Server<upo_path_tracker::SimplePathTrackerConfig>> server_;
         std::unique_ptr<dynamic_reconfigure::Server<upo_path_tracker::SimplePathTrackerConfig>::CallbackType> f_;
 
+        bool disable_rotations = false;
     };
   }  // namespace Navigation
 }  // namespace Upo
