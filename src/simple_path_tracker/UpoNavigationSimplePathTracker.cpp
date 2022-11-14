@@ -18,30 +18,30 @@ namespace Upo{
 
             ROS_INFO("Tracker: Loading params...");
 
-            nh_.param("angular_max_speed", ang_max_speed_, 0.3);
-            nh_.param("linear_max_speed", lin_max_speed_, 0.15);
+            pnh_.param("angular_max_speed", ang_max_speed_, 0.3);
+            pnh_.param("linear_max_speed", lin_max_speed_, 0.15);
 
-            nh_.param("linear_max_speed_back", lin_max_speed_back_, 0.15);
-            nh_.param("angle_margin", angle_margin_, 10.0);
-            nh_.param("start_aproximation_distance", aprox_distance_, 0.2);
-            nh_.param("a", a_, 1.5);
-            nh_.param("b", b_, 0.4);
-            nh_.param("b_back", b_back_, 0.4);
-            nh_.param("dist_aprox1_", dist_aprox1_, 0.05);
-            nh_.param("local_paths_timeout", timeout_time_, 2.0);
-            nh_.param("angle1", angle1_, 35.0);
-            nh_.param("angle2", angle2_, 120.0);
-            nh_.param("angle3", angle3_, 15.0);
+            pnh_.param("linear_max_speed_back", lin_max_speed_back_, 0.15);
+            pnh_.param("angle_margin", angle_margin_, 10.0);
+            pnh_.param("start_aproximation_distance", aprox_distance_, 0.2);
+            pnh_.param("a", a_, 1.5);
+            pnh_.param("b", b_, 0.4);
+            pnh_.param("b_back", b_back_, 0.4);
+            pnh_.param("dist_aprox1_", dist_aprox1_, 0.05);
+            pnh_.param("local_paths_timeout", timeout_time_, 2.0);
+            pnh_.param("angle1", angle1_, 35.0);
+            pnh_.param("angle2", angle2_, 120.0);
+            pnh_.param("angle3", angle3_, 15.0);
 
-            nh_.param("rot_thresh", rot_thresh_, 350);
-            nh_.param("force_rotation", force_rotation_, false);
-            nh_.param("force_final_rotation", force_final_rotation_, true);
+            pnh_.param("rot_thresh", rot_thresh_, 350);
+            pnh_.param("force_rotation", force_rotation_, false);
+            pnh_.param("force_final_rotation", force_final_rotation_, true);
 
-            nh_.param("robot_base_frame", robot_base_frame_id_, (std::string) "base_link");
-            nh_.param("world_frame_id", world_frame_id_, (std::string) "map");
-            nh_.param("odom_frame", odom_frame_id_, (std::string) "odom");
+            pnh_.param("robot_base_frame", robot_base_frame_id_, (std::string) "base_link");
+            pnh_.param("world_frame_id", world_frame_id_, (std::string) "map");
+            pnh_.param("odom_frame", odom_frame_id_, (std::string) "odom");
             double rate;
-            nh_.param("rate", rate, 40.0);
+            pnh_.param("rate", rate, 40.0);
             navigate_timer_ = nh_.createTimer(ros::Duration(1/rate), &SimplePathTracker::processActionsStatus, this);
             ROS_INFO(" Tracker params:");
             ROS_INFO(" a: %f", a_);
@@ -54,7 +54,7 @@ namespace Upo{
                      world_frame_id_.c_str()
                      );
             double back_dur;
-            nh_.param("backwards_duration", back_dur, 30.0);
+            pnh_.param("backwards_duration", back_dur, 30.0);
             backwards_duration_ = ros::Duration(back_dur);
             ROS_INFO("Tracker: Configuring topics...");
             // Publishers, only twist and markers_
