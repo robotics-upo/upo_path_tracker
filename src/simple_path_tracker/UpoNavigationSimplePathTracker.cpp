@@ -43,11 +43,16 @@ namespace Upo{
             double rate;
             nh_.param("rate", rate, 40.0);
             navigate_timer_ = nh_.createTimer(ros::Duration(1/rate), &SimplePathTracker::processActionsStatus, this);
-		ROS_INFO(" Tracker params:");
-		ROS_INFO(" a: %f", a_);
-		ROS_INFO(" b: %f", b_);
-		ROS_INFO(" Angle1: %f", angle1_);
-		ROS_INFO(" Angle2: %f", angle2_);
+            ROS_INFO(" Tracker params:");
+            ROS_INFO(" a: %f", a_);
+            ROS_INFO(" b: %f", b_);
+            ROS_INFO(" Angle1: %f", angle1_);
+            ROS_INFO(" Angle2: %f", angle2_);
+            ROS_INFO("Frame ids: base: %s \t Odom: %s \t World: %s",
+                     robot_base_frame_id_.c_str(),
+                     odom_frame_id_.c_str(),
+                     world_frame_id_.c_str()
+                     );
             double back_dur;
             nh_.param("backwards_duration", back_dur, 30.0);
             backwards_duration_ = ros::Duration(back_dur);
