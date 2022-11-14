@@ -1,6 +1,6 @@
 <launch>
 
-    <rosparam command="load" file="$(find upo_path_tracker)/cfg/navigation.yaml"/>
+    <rosparam command="load" file="$(find upo_path_tracker)/yaml/navigation.yaml"/>
     <node pkg="upo_path_tracker" type="nav_node" name="nav_node" output="screen"/>
 
 </launch>
