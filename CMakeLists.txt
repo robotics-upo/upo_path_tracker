@@ -5,6 +5,8 @@ project(arco_path_tracker)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_BUILD_TYPE Debug) #None, Debug, Release, RelWithDebInfo, MinSizeRel
+
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
@@ -35,7 +37,6 @@ catkin_package(
 include_directories(
   ${PROJECT_SOURCE_DIR}/include
   ${catkin_INCLUDE_DIRS}
-
 )
 
 
@@ -68,3 +69,7 @@ include_directories(
 add_executable(nav_node_2 src/nav_node_2.cpp src/PathTracker.cpp src/securityMargin.cpp)
 target_link_libraries(nav_node_2  ${catkin_LIBRARIES})
 add_dependencies(nav_node_2 ${PROJECT_NAME}_gencfg  ${catkin_EXPORTED_TARGETS}  ${${PROJECT_NAME}_EXPORTED_TARGETS})
+
+add_executable(new_arco_traj_tracker_node src/new_arco_traj_tracker_node.cpp src/new_arco_traj_tracker.cpp)
+target_link_libraries(new_arco_traj_tracker_node ${catkin_LIBRARIES})
+add_dependencies(new_arco_traj_tracker_node ${PROJECT_NAME}_gencfg  ${catkin_EXPORTED_TARGETS}  ${${PROJECT_NAME}_EXPORTED_TARGETS})
