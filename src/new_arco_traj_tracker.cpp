@@ -65,13 +65,15 @@ bool ArcoPathTracker::validateRotInPlace()
 
 void ArcoPathTracker::moveNonHolon()
 {
+  ROS_INFO_THROTTLE(0.5, "angle2NextPoint: %.2f", angle2NextPoint);
+  
   if (angle2NextPoint < 0)
   {
-      angleBack = angle2NextPoint + M_PI;
+      angleBack = angle2NextPoint;
   }
   else
   {
-      angleBack = angle2NextPoint - M_PI;
+      angleBack = angle2NextPoint;
   }
   if (dist2GlobalGoal > distMargin && phase1)
   {
@@ -215,13 +217,17 @@ void ArcoPathTracker::moveNonHolon()
 
 void ArcoPathTracker::navigate()
 {
-    if (navigate_server_ptr->isActive() )
+    if (navigate_server_ptr->isActive() || navigate_server_ptr->isPreemptRequested() )
     {
         computeGeometry();
 
         moveNonHolon();
         publishCmdVel();
     }
+    if (navigate_server_ptr->isPreemptRequested())
+   {
+      navigatePreemptCallback();
+   }
 }
 
 void ArcoPathTracker::publishCmdVel()
@@ -351,7 +357,9 @@ bool ArcoPathTracker::rotationInPlace(tf2Scalar dYaw, double threshold_)
     cout << "Rotation var: " << rad2d(var) << endl;
     if (fabs(rad2d(var)) > threshold_)
     {
+        
         Wz = getVel(angMaxSpeed, a, var);
+        std::cout << "Wz= " << Wz << " , angMaxSpeed= " << angMaxSpeed << " , a= " << a << " , var=" << var << std::endl;;
         return true;
     }
     else
