@@ -217,17 +217,17 @@ void ArcoPathTracker::moveNonHolon()
 
 void ArcoPathTracker::navigate()
 {
-    if (navigate_server_ptr->isActive() || navigate_server_ptr->isPreemptRequested() )
+    if (!navigate_server_ptr->isActive() || navigate_server_ptr->isPreemptRequested() )
+    {
+        printf(PRINTF_MAGENTA "ArcoPathTracker :  Waiting for Action Client to send Goals\n");
+    }
+    else
     {
         computeGeometry();
 
         moveNonHolon();
         publishCmdVel();
     }
-    if (navigate_server_ptr->isPreemptRequested())
-   {
-      navigatePreemptCallback();
-   }
 }
 
 void ArcoPathTracker::publishCmdVel()
@@ -395,9 +395,13 @@ void ArcoPathTracker::fillFeedback(double vx, double vy, double wz, bool sec_sto
 //Okey, this callback is reached when publishing over Navigate3D/cancel topic a empty message
 void ArcoPathTracker::navigatePreemptCallback()
 {
-  navResult.arrived = false;
-  navResult.finalDist.data = sqrt(z_old*z_old+y_old*y_old+x_old*x_old);//TODO: Put the real one
-  navigate_server_ptr->setPreempted(navResult,"Navigation Goal Preempted Call received");
+    publishZeroVel();
+    navResult.arrived = false;
+    navResult.finalDist.data = sqrt(z_old*z_old+y_old*y_old+x_old*x_old);//TODO: Put the real one
+    navigate_server_ptr->setPreempted(navResult,"Navigation Goal Preempted Call received");
+    // navigate_server_ptr->setAborted();
+
+    ROS_ERROR("ARCO Path Tracker: Make plan preempt cb: cancelling");
 }
 
 void ArcoPathTracker::navigateGoalCallback()

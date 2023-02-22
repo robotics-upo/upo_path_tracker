@@ -23,6 +23,7 @@
 #include <std_srvs/Trigger.h>
 
 #define FLOAT_SIGN(val) (((val) > 0.0) ? +1.0 : -1.0)
+#define PRINTF_MAGENTA  "\x1B[35m"
 
 using namespace std;
 
