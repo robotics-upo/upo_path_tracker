@@ -123,28 +123,29 @@ void ArcoPathTracker::moveNonHolon()
   }
   else if (!aproximated)
   {
-    if (phase1)
-      phase1 = false;
-    if (phase2) 
-    {
-      ROS_INFO("Fase 1");
-      if (globalGoalBlFrame.pose.position.x > 0 && globalGoalBlFrame.pose.position.x < 0.1)
-      {
-          Vx = 0.05;
-      }
-      else if (globalGoalBlFrame.pose.position.x < 0 && globalGoalBlFrame.pose.position.x > -0.1)
-      {
-          Vx = -0.05;
-      }
-      else
-      {
-          ROS_INFO("OUT FASE 1");
-          phase2 = false;
-          Vx = 0;
-      }
-    }
-    else
-    {
+    // if (phase1)
+    //   phase1 = false;
+    // if (phase2) 
+    // {
+    //   ROS_INFO("Fase 1");
+    //   if (globalGoalBlFrame.pose.position.x > 0 && globalGoalBlFrame.pose.position.x < 0.1)
+    //   {
+    //       Vx = 0.05;
+    //   }
+    //   else if (globalGoalBlFrame.pose.position.x < 0 && globalGoalBlFrame.pose.position.x > -0.1)
+    //   {
+    //       Vx = -0.05;
+    //   }
+    //   else
+    //   {
+    //       ROS_INFO("OUT FASE 1");
+    //       phase2 = false;
+    //       Vx = 0;
+    //   }
+    // }
+    // else
+    // {
+      Vx = 0;
       ROS_INFO("2 FASE");
 
       static geometry_msgs::PoseStamped robotPose;
@@ -211,7 +212,7 @@ void ArcoPathTracker::moveNonHolon()
         setGoalReachedFlag(1);
         ROS_WARN("Arrived but not aproximated");
       }
-    }
+    // }
   }
 } // namespace Navigators
 
