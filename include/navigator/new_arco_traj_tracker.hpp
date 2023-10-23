@@ -69,7 +69,7 @@ public:
     double angle1, angle2, angle3;
 
     //Flags
-    bool backwards, trajReceived, timeout, navigationPaused,aproximated;
+    bool backwards, trajReceived, timeout, navigationPaused,aproximated, navigate_backwards;
 
     //Input config params
     bool phase1, phase2;
