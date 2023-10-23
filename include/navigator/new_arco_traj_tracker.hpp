@@ -73,6 +73,7 @@ public:
 
     //Input config params
     bool phase1, phase2;
+    bool non_holon = true;
 
     geometry_msgs::PoseStamped globalGoalBlFrame, globalGoal, nextPoseBlFrame;
 
@@ -85,6 +86,8 @@ public:
     inline float rad2d(float angle);
     bool validateRotInPlace();
     void moveNonHolon();
+
+    void moveHolon();
     void navigate();
     void publishCmdVel();
 

@@ -17,6 +17,14 @@ ArcoPathTracker::ArcoPathTracker()
   nh->param("linear_max_speed_back", linMaxSpeedBack, (double)0.2);
   nh->param("angular_max_speed", angMaxSpeed, (double)1.0);
 
+  nh->param("non_holonomic", non_holon, (bool)false);
+
+  if(non_holon) {
+    ROS_INFO("ARCO Path tracker configured in non-holonomic mode");
+  } else {
+    ROS_INFO("ARCO Path tracker configured in holonomic mode");
+  }
+
   nh->param("dist_margin", distMargin, (double)0.35);
   nh->param("a", a, (double)0.5);
   nh->param("b", b, (double)0.5);
@@ -31,8 +39,6 @@ ArcoPathTracker::ArcoPathTracker()
   twistPub = nh->advertise<geometry_msgs::Twist>("/cmd_vel", 1);
   speedMarkerPub = nh->advertise<visualization_msgs::Marker>("speedMarker", 2);
   controlPub = nh->advertise<sensor_msgs::Joy>("/joy", 0);    
-
-
 	
   //Start action server to communicate with local planner
   navigate_server_ptr.reset(new NavigationServer(*nh,"/Navigation",false));
@@ -65,22 +71,10 @@ bool ArcoPathTracker::validateRotInPlace()
 
 void ArcoPathTracker::moveNonHolon()
 {
-  ROS_INFO_THROTTLE(0.5, "angle2NextPoint: %.2f", angle2NextPoint);
   
-  if (angle2NextPoint < 0)
-  {
-      angleBack = angle2NextPoint;
-  }
-  else
-  {
-      angleBack = angle2NextPoint;
-  }
   if (dist2GlobalGoal > distMargin && phase1)
   {
-    ROS_INFO_THROTTLE(0.5, "DIST: %.2f", dist2GlobalGoal);
-    ROS_INFO_THROTTLE(0.5, "Angle Back: %.2f", angleBack);
-    ROS_INFO_THROTTLE(0.5, "Backwards: %d", backwards);
-    ROS_INFO_THROTTLE(0.5, "angle to next point: %.2f", angle2NextPoint);
+
     if (fabs(angle2NextPoint) > d2rad(angle1)) //Rot in place
     {
       if (!backwards && (fabs(angle2NextPoint) < d2rad(angle2) || validateRotInPlace()))
@@ -213,7 +207,24 @@ void ArcoPathTracker::moveNonHolon()
       }
     }
   }
-} // namespace Navigators
+} 
+
+void ArcoPathTracker::moveHolon() 
+{
+    double v = 0.0;
+
+    // Get the speed
+    if (dist2GlobalGoal > distMargin) {
+        v = getVel(linMaxSpeed, b, dist2GlobalGoal);
+    } else {
+        v = 0.02;
+    }
+
+    // Direct it towards the goal
+    Vx = globalGoalBlFrame.pose.position.x / dist2GlobalGoal * v;
+    Vy = globalGoalBlFrame.pose.position.y / dist2GlobalGoal * v;
+    Wz = 0.0;
+}   
 
 void ArcoPathTracker::navigate()
 {
@@ -225,32 +236,23 @@ void ArcoPathTracker::navigate()
     {
         computeGeometry();
 
-        moveNonHolon();
+        if(non_holon) {
+            moveNonHolon();
+        } else {
+            moveHolon();
+        }
+        
         publishCmdVel();
     }
 }
 
 void ArcoPathTracker::publishCmdVel()
 {
-  if (1)
-  {
-      if (navigationPaused)
-          navigationPaused = false;
-
-      fillFeedback(Vx, Vy, Wz, false, "ok");
-      vel.angular.z = Wz;
-      vel.linear.x = Vx;
-      vel.linear.y = Vy;
-      twistPub.publish(vel);
-  }
-  else if (!navigationPaused)
-  {
-      fillFeedback(0, 0, 0, true, "Security stop");
-    printf("Entro 2\n");
-      
-      publishZeroVel();
-      navigationPaused = true;
-  }
+  fillFeedback(Vx, Vy, Wz, false, "Publishing cmd");
+  vel.angular.z = Wz;
+  vel.linear.x = Vx;
+  vel.linear.y = Vy;
+  twistPub.publish(vel);
 }
 
 /**
@@ -309,6 +311,13 @@ void ArcoPathTracker::computeGeometry()
   dist2GlobalGoal = euclideanDistance(globalGoalBlFrame);
   angle2NextPoint = atan2(nextPoseBlFrame.pose.position.y, nextPoseBlFrame.pose.position.x);
   dist2NextPoint = euclideanDistance(nextPoseBlFrame);
+  angleBack = angle2NextPoint; // ??? DID NOT MATTER IF ANGLE WAS POSITIVE OR NEGATIVE
+  
+  ROS_INFO_THROTTLE(0.5, "angle2NextPoint: %.2f", angle2NextPoint);
+  ROS_INFO_THROTTLE(0.5, "DIST: %.2f", dist2GlobalGoal);
+  ROS_INFO_THROTTLE(0.5, "Angle Back: %.2f", angleBack);
+  ROS_INFO_THROTTLE(0.5, "Backwards: %d", backwards);
+  ROS_INFO_THROTTLE(0.5, "angle to next point: %.2f", angle2NextPoint);
 }
 
 bool ArcoPathTracker::rotationInPlace(geometry_msgs::Quaternion finalOrientation, double threshold_)
