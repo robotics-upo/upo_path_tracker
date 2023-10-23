@@ -17,12 +17,12 @@ ArcoPathTracker::ArcoPathTracker()
   nh->param("linear_max_speed_back", linMaxSpeedBack, (double)0.2);
   nh->param("angular_max_speed", angMaxSpeed, (double)1.0);
 
-  nh->param("non_holonomic", non_holon, (bool)false);
+  nh->param("holonomic", holon, (bool)true);
 
-  if(non_holon) {
-    ROS_INFO("ARCO Path tracker configured in non-holonomic mode");
-  } else {
+  if(holon) {
     ROS_INFO("ARCO Path tracker configured in holonomic mode");
+  } else {
+    ROS_INFO("ARCO Path tracker configured in non-holonomic mode");
   }
 
   nh->param("dist_margin", distMargin, (double)0.35);
@@ -218,13 +218,13 @@ void ArcoPathTracker::moveHolon()
     if (dist2GlobalGoal > distMargin) {
         v = getVel(linMaxSpeed, b, dist2GlobalGoal);
     } else {
-        v = 0.02;
+        setGoalReachedFlag(true);
     }
 
     // Direct it towards the goal
     Vx = globalGoalBlFrame.pose.position.x / dist2GlobalGoal * v;
     Vy = globalGoalBlFrame.pose.position.y / dist2GlobalGoal * v;
-    Wz = 0.0;
+    Wz = 0.0; // In a first approximation, we don't care in yaw
 }   
 
 void ArcoPathTracker::navigate()
@@ -237,7 +237,7 @@ void ArcoPathTracker::navigate()
     {
         computeGeometry();
 
-        if(non_holon) {
+        if(!holon) {
             moveNonHolon();
         } else {
             moveHolon();
