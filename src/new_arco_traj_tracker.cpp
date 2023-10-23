@@ -219,7 +219,7 @@ void ArcoPathTracker::navigate()
 {
     if (!navigate_server_ptr->isActive() || navigate_server_ptr->isPreemptRequested() )
     {
-        printf(PRINTF_MAGENTA "ArcoPathTracker :  Waiting for Action Client to send Goals\n");
+        // printf(PRINTF_MAGENTA "ArcoPathTracker :  Waiting for Action Client to send Goals\n");
     }
     else
     {
