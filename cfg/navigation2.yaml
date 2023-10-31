@@ -2,7 +2,7 @@
 robot_base_frame: arco/base_link
 world_frame: world
 #Navigation parameters
-holonomic: false
+holonomic: true
 angular_max_speed: 0.6  
 linear_max_speed: 0.7 #0.6
 angle_margin: 90 #for 1,5 rad/s and 0.6 m/s 10 degress works good in no holonomic way

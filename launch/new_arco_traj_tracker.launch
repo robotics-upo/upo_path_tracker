@@ -2,6 +2,7 @@
     <node pkg="upo_path_tracker" type="new_arco_traj_tracker_node" name="arco_traj_tracker_node" output="screen"> # launch-prefix="gdb -ex run --args" >>
         <rosparam command="load" file="$(find upo_path_tracker)/cfg/navigation2.yaml"/>
         <param name="world_frame" value="world"/> 
+	<param name="holonomic" value="true"/>
         <remap from="/cmd_vel" to="/arco/cmd_vel_nav"/>
         <!-- <remap from="/scanMulti" to="/arco/scan"/> -->
     </node>
