@@ -21,7 +21,7 @@
 #include <actionlib/server/simple_action_server.h>
 
 #include <dynamic_reconfigure/server.h>
-#include <arco_path_tracker/PathTrackerConfig.h>
+#include <upo_path_tracker/PathTrackerConfig.h>
 
 
 class PathTracker
