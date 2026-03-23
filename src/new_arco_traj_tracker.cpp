@@ -10,8 +10,11 @@ ArcoPathTracker::ArcoPathTracker()
 
 
   nh->param("global_frame_id", global_frame_id, static_cast<std::string>("world"));
+
+  nh->param("robot_base_frame", robot_frame, (string) "base_link");
+  nh->param("uav_frame_id", global_frame_id, static_cast<std::string>("base_link")); // To make the UGV point towards UAV in holonomic mode
   
-  ROS_INFO("Using UGV frame %s. Global frame: %s",robot_frame.c_str(), global_frame_id.c_str());
+  ROS_INFO("Using UGV frame %s. Global frame: %s. UAV frame: %s",robot_frame.c_str(), global_frame_id.c_str(), uav_frame.c_str());
 
   nh->param("linear_max_speed", linMaxSpeed, (double)0.2);
   nh->param("linear_max_speed_back", linMaxSpeedBack, (double)0.2);
@@ -29,7 +32,7 @@ ArcoPathTracker::ArcoPathTracker()
   nh->param("a", a, (double)0.5);
   nh->param("b", b, (double)0.5);
   nh->param("b_back", bBack, (double)0.5);
-  nh->param("robot_base_frame", robot_frame, (string) "base_link");
+  
 
   nh->param("angle1", angle1, (double)20);
   nh->param("angle2", angle2, (double)65);
@@ -224,7 +227,32 @@ void ArcoPathTracker::moveHolon()
     // Direct it towards the goal
     Vx = globalGoalBlFrame.pose.position.x / dist2GlobalGoal * v;
     Vy = globalGoalBlFrame.pose.position.y / dist2GlobalGoal * v;
-    Wz = 0.0; // In a first approximation, we don't care in yaw
+
+    // Get the UAV reference
+    static tf2::Quaternion uavQ, robotQ;
+
+    robotQ.setW(1.0);
+    robotQ.setZ(0.0);
+
+    static geometry_msgs::PoseStamped uavPose;
+    uavPose.header.frame_id = uav_frame;
+    uavPose.header.stamp = ros::Time(0);
+    uavPose.pose.orientation.w = 1;
+    uavPose = transformPose(uavPose, uav_frame, robot_frame);
+
+    uavQ.setW(uavPose.pose.orientation.w);
+    uavQ.setZ(uavPose.pose.orientation.z);
+
+    tf2Scalar shortest = tf2::angleShortestPath(robotQ, uavQ);
+    double sh = static_cast<double>(shortest);
+    cout << "Angular error: " << sh << endl;
+
+    Wz = sh * 0.5; // In a first approximation, we don't care in yaw
+    if (Wz > angMaxSpeed) {
+        Wz = angMaxSpeed;
+    } else if (Wz < -angMaxSpeed) {
+        Wz = -angMaxSpeed;
+    }
 }   
 
 void ArcoPathTracker::navigate()

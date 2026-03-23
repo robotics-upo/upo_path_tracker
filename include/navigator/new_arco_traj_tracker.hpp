@@ -54,7 +54,7 @@ public:
     //Service clients
     visualization_msgs::Marker speedMarker,rotMarker;
     //Used to set the marker frame
-    std::string robot_frame, global_frame_id;
+    std::string robot_frame, global_frame_id, uav_frame;
     ros::Time time_count;
     ros::Publisher twistPub;
     ros::ServiceClient check_rot_srv;
