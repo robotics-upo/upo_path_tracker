@@ -232,6 +232,10 @@ void ArcoPathTracker::navigate()
     if (!navigate_server_ptr->isActive() || navigate_server_ptr->isPreemptRequested() )
     {
         // printf(PRINTF_MAGENTA "ArcoPathTracker :  Waiting for Action Client to send Goals\n");
+	Vx = 0.0;
+	Vy = 0.0;
+	Wz = 0.0;
+	publishCmdVel();
     }
     else
     {
