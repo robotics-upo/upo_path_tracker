@@ -3,7 +3,7 @@
 
 ArcoPathTracker::ArcoPathTracker()
 {
-  
+  active = false;
   nh.reset(new ros::NodeHandle("~"));
   tfBuffer.reset(new tf2_ros::Buffer);
   tf2_list.reset(new tf2_ros::TransformListener(*tfBuffer));
@@ -11,12 +11,12 @@ ArcoPathTracker::ArcoPathTracker()
 
   nh->param("global_frame_id", global_frame_id, static_cast<std::string>("world"));
 
-  nh->param("robot_base_frame", robot_frame, (string) "base_link");
-  nh->param("uav_frame_id", global_frame_id, static_cast<std::string>("base_link")); // To make the UGV point towards UAV in holonomic mode
+  nh->param("robot_base_frame", robot_frame, (string) "arco/base_link");
+  nh->param("uav_frame_id", uav_frame, static_cast<std::string>("base_link")); // To make the UGV point towards UAV in holonomic mode
   
   ROS_INFO("Using UGV frame %s. Global frame: %s. UAV frame: %s",robot_frame.c_str(), global_frame_id.c_str(), uav_frame.c_str());
 
-  nh->param("linear_max_speed", linMaxSpeed, (double)0.2);
+  nh->param("linear_max_speed", linMaxSpeed, (double)0.2); 
   nh->param("linear_max_speed_back", linMaxSpeedBack, (double)0.2);
   nh->param("angular_max_speed", angMaxSpeed, (double)1.0);
 
@@ -48,6 +48,8 @@ ArcoPathTracker::ArcoPathTracker()
   navigate_server_ptr->registerGoalCallback(boost::bind(&ArcoPathTracker::navigateGoalCallback,this));
   navigate_server_ptr->registerPreemptCallback(boost::bind(&ArcoPathTracker::navigatePreemptCallback,this));
   navigate_server_ptr->start();
+
+  ROS_INFO("ARCO Path Tracker: End of config");
 }
 
 inline float ArcoPathTracker::d2rad(float angle)
@@ -243,9 +245,15 @@ void ArcoPathTracker::moveHolon()
     uavQ.setW(uavPose.pose.orientation.w);
     uavQ.setZ(uavPose.pose.orientation.z);
 
+    cout << "RobotQ: " << robotQ.getW() << " " << robotQ.getZ() << endl;
+    cout << "UAVQ: " << uavQ.getW() << " " << uavQ.getZ() << endl;
+
     tf2Scalar shortest = tf2::angleShortestPath(robotQ, uavQ);
     double sh = static_cast<double>(shortest);
-    cout << "Angular error: " << sh << endl;
+    if (isnan(sh)) {
+        sh = 0;
+    }
+    cout << "Linear error: "<< dist2GlobalGoal << " Angular error: " << sh << endl;
 
     Wz = sh * 0.5; // In a first approximation, we don't care in yaw
     if (Wz > angMaxSpeed) {
@@ -257,16 +265,16 @@ void ArcoPathTracker::moveHolon()
 
 void ArcoPathTracker::navigate()
 {
-    if (!navigate_server_ptr->isActive() || navigate_server_ptr->isPreemptRequested() )
-    {
-        // printf(PRINTF_MAGENTA "ArcoPathTracker :  Waiting for Action Client to send Goals\n");
-	Vx = 0.0;
+    Vx = 0.0;
 	Vy = 0.0;
 	Wz = 0.0;
-	publishCmdVel();
-    }
-    else
+    if (!active)
     {
+        printf(PRINTF_MAGENTA "ArcoPathTracker :  Waiting for Action Client to send Goals\n");
+	    Vx = 0.0;
+	    Vy = 0.0;
+	    Wz = 0.0;
+    } else if (!navigate_server_ptr->isPreemptRequested()) {
         computeGeometry();
 
         if(!holon) {
@@ -274,9 +282,8 @@ void ArcoPathTracker::navigate()
         } else {
             moveHolon();
         }
-        
-        publishCmdVel();
     }
+    publishCmdVel();
 }
 
 void ArcoPathTracker::publishCmdVel()
@@ -441,6 +448,7 @@ void ArcoPathTracker::navigatePreemptCallback()
     navResult.arrived = false;
     navResult.finalDist.data = sqrt(z_old*z_old+y_old*y_old+x_old*x_old);//TODO: Put the real one
     navigate_server_ptr->setPreempted(navResult,"Navigation Goal Preempted Call received");
+    active = false;
     // navigate_server_ptr->setAborted();
 
     ROS_ERROR("ARCO Path Tracker: Make plan preempt cb: cancelling");
@@ -451,6 +459,7 @@ void ArcoPathTracker::navigateGoalCallback()
  if (navigate_server_ptr->isNewGoalAvailable())
     {
         ROS_INFO("Accepting new goal ");
+        active = true;
         navGoal = navigate_server_ptr->acceptNewGoal();
         globalGoal.pose = navGoal->global_goal;
         cout << "globalGoal: " << globalGoal.pose.position.x << " " << globalGoal.pose.position.y << " " << globalGoal.pose.orientation.z << " " << globalGoal.pose.orientation.w << endl;
@@ -492,6 +501,8 @@ void ArcoPathTracker::setGoalReachedFlag(bool status_)
 
         publishZeroVel();
         ROS_WARN("Arrived");
+
+        active = false;
     }
     else if (!status_ && navResult.arrived)
     {
@@ -526,13 +537,14 @@ geometry_msgs::PoseStamped ArcoPathTracker::transformPose(geometry_msgs::PoseSta
     try
     {
         transformStamped = tfBuffer->lookupTransform(to, from, ros::Time(0));
+        tf2::doTransform(originalPose, nextPoseStamped, transformStamped);
     }
     catch (tf2::TransformException &ex)
     {
         ROS_WARN("No transform %s", ex.what());
     }
 
-    tf2::doTransform(originalPose, nextPoseStamped, transformStamped);
+    
 
     return nextPoseStamped;
 }

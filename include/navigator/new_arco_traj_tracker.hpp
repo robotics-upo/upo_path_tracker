@@ -70,6 +70,7 @@ public:
 
     //Flags
     bool backwards, trajReceived, timeout, navigationPaused,aproximated, navigate_backwards;
+    bool active = false;
 
     //Input config params
     bool phase1, phase2;
