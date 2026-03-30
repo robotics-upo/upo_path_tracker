@@ -240,6 +240,7 @@ void ArcoPathTracker::moveHolon()
     uavPose.header.frame_id = uav_frame;
     uavPose.header.stamp = ros::Time(0);
     uavPose.pose.orientation.w = 1;
+    uavPose.pose.orientation.x = uavPose.pose.orientation.y = uavPose.pose.orientation.z = 0.0;
     uavPose = transformPose(uavPose, uav_frame, robot_frame);
 
     uavQ.setW(uavPose.pose.orientation.w);
@@ -248,14 +249,17 @@ void ArcoPathTracker::moveHolon()
     cout << "RobotQ: " << robotQ.getW() << " " << robotQ.getZ() << endl;
     cout << "UAVQ: " << uavQ.getW() << " " << uavQ.getZ() << endl;
 
-    tf2Scalar shortest = tf2::angleShortestPath(robotQ, uavQ);
-    double sh = static_cast<double>(shortest);
-    if (isnan(sh)) {
-        sh = 0;
-    }
-    cout << "Linear error: "<< dist2GlobalGoal << " Angular error: " << sh << endl;
+    static tf2::Matrix3x3 m;
+    static double robotYaw, rpitch, rroll;
+    m.setRotation(uavQ);
+    m.getEulerYPR(robotYaw, rpitch, rroll);
 
-    Wz = sh * 0.5; // In a first approximation, we don't care in yaw
+    if (isnan(robotYaw)) {
+        robotYaw = 0;
+    }
+    cout << "Linear error: "<< dist2GlobalGoal << " Angular error: " << robotYaw << endl;
+
+    Wz = robotYaw * 0.2; // In a first approximation, we don't care in yaw
     if (Wz > angMaxSpeed) {
         Wz = angMaxSpeed;
     } else if (Wz < -angMaxSpeed) {
